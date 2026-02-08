@@ -12,116 +12,91 @@ namespace SwAutomation
         [STAThread]
         static void Main(string[] args)
         {
-            // 1. Setup Colors
+            // --- UI SETUP ---
             var backColor = (Color)ColorConverter.ConvertFromString("#252526");
             var accentColor = (Color)ColorConverter.ConvertFromString("#007ACC");
-            var textColor = Brushes.White;
+            Window win = new Window { Title = "SW Smart Generator", Width = 400, Height = 450, Background = new SolidColorBrush(backColor), Foreground = Brushes.White, WindowStartupLocation = WindowStartupLocation.CenterScreen, Topmost = true };
+            StackPanel stack = new StackPanel { Margin = new Thickness(20) };
 
-            // 2. Create Window (Increased height to 320 to fit the extra field)
-            Window win = new Window
-            {
-                Title = "SolidWorks Geometric Creator",
-                Width = 350, Height = 320, 
-                Background = new SolidColorBrush(backColor),
-                Foreground = textColor,
-                WindowStyle = WindowStyle.ThreeDBorderWindow,
-                WindowStartupLocation = WindowStartupLocation.CenterScreen,
-                Topmost = true,
-                FontFamily = new FontFamily("Segoe UI Semibold")
-            };
+            // Input Fields
+            TextBox txtX = CreateInput(stack, "Base Width X (mm):");
+            TextBox txtY = CreateInput(stack, "Base Height Y (mm):");
+            TextBox txtZ = CreateInput(stack, "Extrude Depth (mm):");
+            TextBox txtHoleDia = CreateInput(stack, "Hole Diameter (mm):");
+            TextBox txtHoleCount = CreateInput(stack, "Number of Holes:");
 
-            Grid grid = new Grid { Margin = new Thickness(20) };
-            StackPanel stack = new StackPanel();
-
-            // Inputs
-            var labelX = new TextBlock { Text = "Width X (mm):", Margin = new Thickness(0,0,0,5) };
-            TextBox txtX = new TextBox { Height = 30, Background = Brushes.DimGray, Foreground = Brushes.White, BorderThickness = new Thickness(0), VerticalContentAlignment = VerticalAlignment.Center };
-            
-            var labelY = new TextBlock { Text = "Height Y (mm):", Margin = new Thickness(0,10,0,5) };
-            TextBox txtY = new TextBox { Height = 30, Background = Brushes.DimGray, Foreground = Brushes.White, BorderThickness = new Thickness(0), VerticalContentAlignment = VerticalAlignment.Center };
-
-            // NEW: Extrusion Depth Input
-            var labelZ = new TextBlock { Text = "Extrusion Depth (mm):", Margin = new Thickness(0,10,0,5) };
-            TextBox txtZ = new TextBox { Height = 30, Background = Brushes.DimGray, Foreground = Brushes.White, BorderThickness = new Thickness(0), VerticalContentAlignment = VerticalAlignment.Center };
-
-            Button btnCreate = new Button 
-            { 
-                Content = "GENERATE 3D PART", 
-                Height = 40, 
-                Margin = new Thickness(0,20,0,0),
-                Background = new SolidColorBrush(accentColor),
-                Foreground = Brushes.White,
-                FontWeight = FontWeights.Bold,
-                BorderThickness = new Thickness(0)
-            };
-
-            // Assembly
-            stack.Children.Add(labelX); stack.Children.Add(txtX);
-            stack.Children.Add(labelY); stack.Children.Add(txtY);
-            stack.Children.Add(labelZ); stack.Children.Add(txtZ);
+            Button btnCreate = new Button { Content = "GENERATE WITH SAFETY CHECK", Height = 40, Margin = new Thickness(0,20,0,0), Background = new SolidColorBrush(accentColor), Foreground = Brushes.White, FontWeight = FontWeights.Bold };
             stack.Children.Add(btnCreate);
-            grid.Children.Add(stack);
-            win.Content = grid;
+            win.Content = stack;
 
-            // 4. SolidWorks Handshake
             btnCreate.Click += (s, e) =>
             {
-                if (double.TryParse(txtX.Text, out double x) && 
-                    double.TryParse(txtY.Text, out double y) && 
-                    double.TryParse(txtZ.Text, out double z))
+                // Parse all inputs
+                if (double.TryParse(txtX.Text, out double x) && double.TryParse(txtY.Text, out double y) && 
+                    double.TryParse(txtZ.Text, out double z) && double.TryParse(txtHoleDia.Text, out double dia) && 
+                    int.TryParse(txtHoleCount.Text, out int count))
                 {
-                    btnCreate.Content = "EXTRUDING...";
-                    btnCreate.IsEnabled = false;
-                    RunSolidWorksTask(x, y, z);
+                    // --- BACKEND SAFETY & RULES ---
+                    double totalHoleWidth = count * dia;
+                    
+                    if (dia >= y || dia >= x) {
+                        MessageBox.Show($"Error: Hole Diameter ({dia}mm) is larger than the part dimensions!");
+                        return;
+                    }
+
+                    if (totalHoleWidth > (x * 0.8)) { // Rule: Holes cannot take up more than 80% of the length
+                        MessageBox.Show($"Error: Too many holes! {count} holes of {dia}mm exceeds safety limit for a {x}mm width. Reduce count or diameter.");
+                        return;
+                    }
+
+                    btnCreate.Content = "BUILDING...";
+                    RunSolidWorksTask(x, y, z, dia, count);
                     win.Close();
                 }
-                else
-                {
-                    MessageBox.Show("Please enter valid numeric values for all dimensions.");
-                }
+                else { MessageBox.Show("Please enter valid numbers in all fields."); }
             };
-
             win.ShowDialog();
         }
 
-        static void RunSolidWorksTask(double x, double y, double z)
+        static TextBox CreateInput(StackPanel p, string label) {
+            p.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0,10,0,5) });
+            TextBox t = new TextBox { Height = 25, Background = Brushes.DimGray, Foreground = Brushes.White, BorderThickness = new Thickness(0) };
+            p.Children.Add(t);
+            return t;
+        }
+
+        static void RunSolidWorksTask(double x, double y, double z, double holeDia, int holeCount)
 {
     SldWorks swApp = (SldWorks)Activator.CreateInstance(Type.GetTypeFromProgID("SldWorks.Application")!);
     swApp.Visible = true;
-    
     string template = swApp.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplatePart);
     ModelDoc2 swModel = (ModelDoc2)swApp.NewDocument(template, 0, 0, 0);
 
-    // 1. Create Sketch
+    // 1. START SKETCH
     swModel.Extension.SelectByID2("Front Plane", "PLANE", 0, 0, 0, false, 0, null, 0);
     swModel.SketchManager.InsertSketch(true);
-    swModel.SketchManager.CreateCornerRectangle(0, 0, 0, x/1000, y/1000, 0);
-    
-    // 2. Extrude Boss (Updated with all 23 required parameters)
+
+    // 2. DRAW RECTANGLE
+    swModel.SketchManager.CreateCornerRectangle(0, 0, 0, x / 1000, y / 1000, 0);
+
+    // 3. DRAW HOLES (While still in the same sketch)
+    double centerY = (y / 2) / 1000; 
+    double spacingX = (x / 1000) / (holeCount + 1);
+
+    for (int i = 1; i <= holeCount; i++)
+    {
+        double currentX = spacingX * i;
+        // Draw the circles inside the rectangle area
+        swModel.SketchManager.CreateCircleByRadius(currentX, centerY, 0, (holeDia / 2) / 1000);
+    }
+
+    // 4. EXTRUDE EVERYTHING AT ONCE
+    // Because the circles are inside the rectangle, SW treats them as voids.
     swModel.FeatureManager.FeatureExtrusion2(
-        true,               // 1. Sd (Single Direction)
-        false,              // 2. Flip
-        false,              // 3. Dir
-        (int)swEndConditions_e.swEndCondBlind, // 4. T1 (End Condition)
-        0,                  // 5. T2
-        z / 1000,           // 6. D1 (Depth in Meters)
-        0,                  // 7. D2
-        false,              // 8. Dchk1
-        false,              // 9. Dchk2
-        false,              // 10. Ddir1
-        false,              // 11. Ddir2
-        0,                  // 12. Dang1
-        0,                  // 13. Dang2
-        false,              // 14. OffsetReverse1
-        false,              // 15. OffsetReverse2
-        false,              // 16. TranslateSurface1
-        false,              // 17. TranslateSurface2
-        true,               // 18. Merge
-        true,               // 19. UseFeatScope
-        true,               // 20. UseAutoSelect
-        0,                  // 21. T0
-        0,                  // 22. StartOffset
-        false               // 23. FlipStartOffset
+        true, false, false, 
+        (int)swEndConditions_e.swEndCondBlind, 
+        0, z / 1000, 0, false, false, false, false, 0, 0, false, false, false, false, 
+        true, true, true, 0, 0, false
     );
 
     swModel.ViewZoomtofit2();
