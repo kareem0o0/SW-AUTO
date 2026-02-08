@@ -1,0 +1,33 @@
+# Build results
+bin/
+obj/
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+
+# Visual Studio cache/options
+.vs/
+
+# NuGet
+*.nupkg
+*.snupkg
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+~*
+
+# SolidWorks
+*.sldprt
+*.sldasm
+*.slddrw
