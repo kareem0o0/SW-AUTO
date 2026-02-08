@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("SwAutomationApp")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c8f77c153c8e2e68e0c98e0035295f0b6003253b")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+aa745a1ba0a9e75683bc3b72fefffa03c74427a8")]
 [assembly: System.Reflection.AssemblyProductAttribute("SwAutomationApp")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SwAutomationApp")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
