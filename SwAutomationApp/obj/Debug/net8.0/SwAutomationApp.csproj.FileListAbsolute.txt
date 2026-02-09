@@ -1,0 +1,15 @@
+D:\work\birr machines\SwAutomationApp\bin\Debug\net8.0\SwAutomationApp.exe
+D:\work\birr machines\SwAutomationApp\bin\Debug\net8.0\SwAutomationApp.deps.json
+D:\work\birr machines\SwAutomationApp\bin\Debug\net8.0\SwAutomationApp.runtimeconfig.json
+D:\work\birr machines\SwAutomationApp\bin\Debug\net8.0\SwAutomationApp.dll
+D:\work\birr machines\SwAutomationApp\bin\Debug\net8.0\SwAutomationApp.pdb
+D:\work\birr machines\SwAutomationApp\obj\Debug\net8.0\SwAutomationApp.csproj.AssemblyReference.cache
+D:\work\birr machines\SwAutomationApp\obj\Debug\net8.0\SwAutomationApp.GeneratedMSBuildEditorConfig.editorconfig
+D:\work\birr machines\SwAutomationApp\obj\Debug\net8.0\SwAutomationApp.AssemblyInfoInputs.cache
+D:\work\birr machines\SwAutomationApp\obj\Debug\net8.0\SwAutomationApp.AssemblyInfo.cs
+D:\work\birr machines\SwAutomationApp\obj\Debug\net8.0\SwAutomationApp.csproj.CoreCompileInputs.cache
+D:\work\birr machines\SwAutomationApp\obj\Debug\net8.0\SwAutomationApp.dll
+D:\work\birr machines\SwAutomationApp\obj\Debug\net8.0\refint\SwAutomationApp.dll
+D:\work\birr machines\SwAutomationApp\obj\Debug\net8.0\SwAutomationApp.pdb
+D:\work\birr machines\SwAutomationApp\obj\Debug\net8.0\SwAutomationApp.genruntimeconfig.cache
+D:\work\birr machines\SwAutomationApp\obj\Debug\net8.0\ref\SwAutomationApp.dll
