@@ -92,7 +92,7 @@ namespace SwAutomation
             mainLayout.Children.Add(btnGenerate);
             win.Content = mainLayout;
 
-            // --- REUSE YOUR EXISTING GENERATEPART LOGIC HERE ---
+            // --- Button Click Handler: Validate first, then create if valid ---
             btnGenerate.Click += (s, e) =>
             {
                 string outFolder = @"D:\work\birr machines\parts";
@@ -101,10 +101,30 @@ namespace SwAutomation
                     SldWorks swApp = (SldWorks)Activator.CreateInstance(Type.GetTypeFromProgID("SldWorks.Application")!);
                     swApp.Visible = true;
 
-                    GeneratePart(swApp, "Part_A", aX.Text, aY.Text, aZ.Text, aHoleDia.Text, aHoleCount.Text, outFolder);
-                    GeneratePart(swApp, "Part_B", bX.Text, bY.Text, bZ.Text, bHoleDia.Text, bHoleCount.Text, outFolder);
+                    // Validate Part A
+                    string validationA = ValidatePart("Part_A", aX.Text, aY.Text, aZ.Text, aHoleDia.Text, aHoleCount.Text);
+                    if (!string.IsNullOrEmpty(validationA))
+                    {
+                        MessageBox.Show(validationA, "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return; // Stay in window, allow user to adjust
+                    }
 
-                    MessageBox.Show($"Success! Parts saved to: {outFolder}");
+                    // Validate Part B
+                    string validationB = ValidatePart("Part_B", bX.Text, bY.Text, bZ.Text, bHoleDia.Text, bHoleCount.Text);
+                    if (!string.IsNullOrEmpty(validationB))
+                    {
+                        MessageBox.Show(validationB, "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return; // Stay in window, allow user to adjust
+                    }
+
+                    // All validations passed, now create parts
+                    string partAPath = GeneratePart(swApp, "Part_A", aX.Text, aY.Text, aZ.Text, aHoleDia.Text, aHoleCount.Text, outFolder);
+                    string partBPath = GeneratePart(swApp, "Part_B", bX.Text, bY.Text, bZ.Text, bHoleDia.Text, bHoleCount.Text, outFolder);
+
+                    // Create assembly with both parts
+                    GenerateAssembly(swApp, partAPath, partBPath, outFolder);
+
+                    MessageBox.Show($"Success! Parts and Assembly saved to: {outFolder}");
                     win.Close();
                 }
                 catch (Exception ex) { MessageBox.Show("Error: " + ex.Message); }
@@ -113,10 +133,65 @@ namespace SwAutomation
             win.ShowDialog();
         }
 
-        // ... (Keep your GeneratePart and CreateInput methods the same as before)
-        static void GeneratePart(SldWorks swApp, string name, string sx, string sy, string sz, string sDia, string sCount, string folder)
+        // --- Validation Method ---
+        static string ValidatePart(string name, string sx, string sy, string sz, string sDia, string sCount)
         {
-            if (!double.TryParse(sx, out double x) || !double.TryParse(sy, out double y) || !double.TryParse(sz, out double z)) return;
+            if (!double.TryParse(sx, out double x) || !double.TryParse(sy, out double y) || !double.TryParse(sz, out double z))
+                return $"{name}: Invalid dimensions (Width, Height, Extrude must be numbers)";
+
+            if (double.TryParse(sDia, out double hDia) && int.TryParse(sCount, out int hCount) && hCount > 0)
+            {
+                double spacingX = x / (hCount + 1);
+                double radiusMM = hDia / 2;
+                
+                // Calculate circle positions
+                var circlePositions = new System.Collections.Generic.List<(double px, double py)>();
+                for (int i = 1; i <= hCount; i++)
+                {
+                    circlePositions.Add((spacingX * i, y / 2.0));
+                }
+                
+                // Check for overlaps
+                int overlapCount = 0;
+                double totalOverlapDistance = 0;
+                
+                for (int i = 0; i < circlePositions.Count; i++)
+                {
+                    for (int j = i + 1; j < circlePositions.Count; j++)
+                    {
+                        double dx = circlePositions[j].px - circlePositions[i].px;
+                        double dy = circlePositions[j].py - circlePositions[i].py;
+                        double distance = Math.Sqrt(dx * dx + dy * dy);
+                        double requiredDistance = hDia; // Minimum distance = diameter (to avoid overlap)
+                        
+                        if (distance < requiredDistance)
+                        {
+                            overlapCount++;
+                            double overlapDist = requiredDistance - distance;
+                            totalOverlapDistance += overlapDist;
+                        }
+                    }
+                }
+                
+                // Return error if overlaps detected
+                if (overlapCount > 0)
+                {
+                    return $"{name}: {overlapCount} circle overlap(s) detected!\n" +
+                           $"Total overlap distance: {totalOverlapDistance:F2} mm\n" +
+                           $"Circle diameter: {hDia} mm\n\n" +
+                           $"Options to fix:\n" +
+                           $"• Increase part width (X)\n" +
+                           $"• Decrease hole count\n" +
+                           $"• Decrease hole diameter\n\n" +
+                           $"Adjust parameters and try again.";
+                }
+            }
+
+            return ""; // No errors
+        }
+        static string GeneratePart(SldWorks swApp, string name, string sx, string sy, string sz, string sDia, string sCount, string folder)
+        {
+            if (!double.TryParse(sx, out double x) || !double.TryParse(sy, out double y) || !double.TryParse(sz, out double z)) return "";
             string template = swApp.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplatePart);
             ModelDoc2 swModel = (ModelDoc2)swApp.NewDocument(template, 0, 0, 0);
             swModel.Extension.SelectByID2("Front Plane", "PLANE", 0, 0, 0, false, 0, null, 0);
@@ -129,7 +204,37 @@ namespace SwAutomation
                     swModel.SketchManager.CreateCircleByRadius(spacingX * i, (y / 2000), 0, (hDia / 2000));
             }
             swModel.FeatureManager.FeatureExtrusion2(true, false, false, (int)swEndConditions_e.swEndCondBlind, 0, z / 1000, 0, false, false, false, false, 0, 0, false, false, false, false, true, true, true, 0, 0, false);
-            swModel.SaveAs3(Path.Combine(folder, name + ".SLDPRT"), (int)swSaveAsVersion_e.swSaveAsCurrentVersion, (int)swSaveAsOptions_e.swSaveAsOptions_Silent);
+            string fullPath = Path.Combine(folder, name + ".SLDPRT");
+            swModel.SaveAs3(fullPath, (int)swSaveAsVersion_e.swSaveAsCurrentVersion, (int)swSaveAsOptions_e.swSaveAsOptions_Silent);
+            System.Threading.Thread.Sleep(500); // Wait for file to be written before assembly references it
+            return fullPath;
+        }
+
+        static void GenerateAssembly(SldWorks swApp, string partAPath, string partBPath, string folder)
+        {
+            // Get assembly template
+            string template = swApp.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplateAssembly);
+            
+            // Create new assembly document
+            AssemblyDoc swAssy = (AssemblyDoc)swApp.NewDocument(template, 0, 0, 0);
+            ModelDoc2 assyModel = (ModelDoc2)swAssy;
+
+            // Insert Part A at origin
+            bool resultA = swAssy.AddComponent(partAPath, 0, 0, 0);
+            if (!resultA)
+                throw new Exception("Failed to insert Part A into assembly");
+
+            // Insert Part B offset in Z direction (10mm)
+            bool resultB = swAssy.AddComponent(partBPath, 0, 0, 0.01); // 10mm = 0.01m
+            if (!resultB)
+                throw new Exception("Failed to insert Part B into assembly");
+
+            // Rebuild assembly to make components visible
+            assyModel.ForceRebuild3(false);
+
+            // Save assembly
+            string assemblyPath = Path.Combine(folder, "Final_Assembly.SLDASM");
+            assyModel.SaveAs3(assemblyPath, (int)swSaveAsVersion_e.swSaveAsCurrentVersion, (int)swSaveAsOptions_e.swSaveAsOptions_Silent);
         }
 
         static TextBox CreateInput(StackPanel p, string label, string defaultVal) {
