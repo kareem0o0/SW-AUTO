@@ -1,0 +1,124 @@
+using System;
+using System.IO;
+using SolidWorks.Interop.sldworks;
+using SolidWorks.Interop.swconst;
+
+namespace SwAutomation
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            // The directory where all generated files will be stored
+            string outFolder = @"D:\work\birr machines\parts";
+            
+            try
+            {
+                // Ensure the folder exists; if not, create it
+                if (!Directory.Exists(outFolder)) Directory.CreateDirectory(outFolder);
+
+                // Start SOLIDWORKS and make it visible
+                SldWorks swApp = (SldWorks)Activator.CreateInstance(Type.GetTypeFromProgID("SldWorks.Application"));
+                swApp.Visible = true;
+
+                // GENERATE PART A: A 100x50x10 block with 3 holes
+                string partAPath = GeneratePart(swApp, "Part_A", "100", "50", "10", "5", "3", outFolder);
+
+                // GENERATE PART B: An 80x80x20 block with 2 holes
+                string partBPath = GeneratePart(swApp, "Part_B", "80", "80", "20", "4", "2", outFolder);
+
+                // ASSEMBLE: Create a new assembly and mate these two parts
+                GenerateAssembly(swApp, partAPath, partBPath, outFolder);
+
+                Console.WriteLine($"Success! Parts and Assembly saved to: {outFolder}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error: " + ex.Message);
+            }
+        }
+
+        static string GeneratePart(SldWorks swApp, string name, string sx, string sy, string sz, string sDia, string sCount, string folder)
+        {
+            // Convert string inputs to doubles (meters = mm / 1000)
+            if (!double.TryParse(sx, out double x) || !double.TryParse(sy, out double y) || !double.TryParse(sz, out double z)) return "";
+
+            // Get the default Part template from SOLIDWORKS settings
+            string template = swApp.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplatePart);
+            
+            // Create the new document
+            ModelDoc2 swModel = (ModelDoc2)swApp.NewDocument(template, 0, 0, 0);
+
+            // Select the Front Plane and start a sketch
+            swModel.Extension.SelectByID2("Front Plane", "PLANE", 0, 0, 0, false, 0, null, 0);
+            swModel.SketchManager.InsertSketch(true);
+
+            // Draw the main rectangle (Dimensions converted to meters)
+            swModel.SketchManager.CreateCornerRectangle(0, 0, 0, x / 1000, y / 1000, 0);
+
+            // Create Holes: Calculate spacing based on count and draw circles
+            if (double.TryParse(sDia, out double hDia) && int.TryParse(sCount, out int hCount) && hCount > 0)
+            {
+                double spacingX = (x / 1000) / (hCount + 1);
+                for (int i = 1; i <= hCount; i++)
+                    swModel.SketchManager.CreateCircleByRadius(spacingX * i, (y / 2000), 0, (hDia / 2000));
+            }
+
+            // Extrude the sketch to create a 3D block
+            swModel.FeatureManager.FeatureExtrusion2(true, false, false, (int)swEndConditions_e.swEndCondBlind, 0, z / 1000, 0, false, false, false, false, 0, 0, false, false, false, false, true, true, true, 0, 0, false);
+
+            // Save the part to the specified folder
+            string fullPath = Path.Combine(folder, name + ".SLDPRT");
+            swModel.SaveAs3(fullPath, (int)swSaveAsVersion_e.swSaveAsCurrentVersion, (int)swSaveAsOptions_e.swSaveAsOptions_Silent);
+            
+            return fullPath;
+        }
+
+        static void GenerateAssembly(SldWorks swApp, string partAPath, string partBPath, string folder)
+        {
+            // Get the default Assembly template and create a new assembly document
+            string template = swApp.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplateAssembly);
+            ModelDoc2 assyModel = (ModelDoc2)swApp.NewDocument(template, 0, 0, 0);
+            AssemblyDoc swAssy = (AssemblyDoc)assyModel;
+
+            // 1. INSERT COMPONENTS
+            // AddComponent5 returns the Component2 object, which allows us to get the exact instance name (e.g., Part_A-1)
+            Component2 compA = swAssy.AddComponent5(partAPath, (int)swAddComponentConfigOptions_e.swAddComponentConfigOptions_CurrentSelectedConfig, "", false, "", 0, 0, 0);
+            Component2 compB = swAssy.AddComponent5(partBPath, (int)swAddComponentConfigOptions_e.swAddComponentConfigOptions_CurrentSelectedConfig, "", false, "", 0, 0, 0.05);
+
+            // Capture names for selection strings
+            string assemblyName = assyModel.GetTitle();
+            string partAName = compA.Name2;
+            string partBName = compB.Name2;
+
+            // 2. MATE FRONT PLANES (Aligns them in the Z-direction)
+            assyModel.ClearSelection2(true);
+            
+            // Format: "PlaneName@InstanceName@AssemblyName"
+            bool status1 = assyModel.Extension.SelectByID2("Front Plane@" + partAName + "@" + assemblyName, "PLANE", 0, 0, 0, false, 1, null, 0);
+            bool status2 = assyModel.Extension.SelectByID2("Front Plane@" + partBName + "@" + assemblyName, "PLANE", 0, 0, 0, true, 1, null, 0);
+
+            if (status1 && status2)
+            {
+                int mateError = 0;
+                swAssy.AddMate3((int)swMateType_e.swMateCOINCIDENT, (int)swMateAlign_e.swMateAlignALIGNED, false, 0, 0, 0, 0, 0, 0, 0, 0, false, out mateError);
+            }
+
+            // 3. MATE TOP PLANES (Aligns them in the Y-direction)
+            assyModel.ClearSelection2(true);
+            status1 = assyModel.Extension.SelectByID2("Top Plane@" + partAName + "@" + assemblyName, "PLANE", 0, 0, 0, false, 1, null, 0);
+            status2 = assyModel.Extension.SelectByID2("Top Plane@" + partBName + "@" + assemblyName, "PLANE", 0, 0, 0, true, 1, null, 0);
+            
+            if (status1 && status2)
+            {
+                int mateError = 0;
+                swAssy.AddMate3((int)swMateType_e.swMateCOINCIDENT, (int)swMateAlign_e.swMateAlignALIGNED, false, 0, 0, 0, 0, 0, 0, 0, 0, false, out mateError);
+            }
+
+            // Final Rebuild and Save
+            assyModel.ForceRebuild3(false);
+            string assemblyPath = Path.Combine(folder, "Final_Assembly.SLDASM");
+            assyModel.SaveAs3(assemblyPath, (int)swSaveAsVersion_e.swSaveAsCurrentVersion, (int)swSaveAsOptions_e.swSaveAsOptions_Silent);
+        }
+    }
+}
