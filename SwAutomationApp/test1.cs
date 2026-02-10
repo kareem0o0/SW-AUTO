@@ -37,10 +37,10 @@ namespace SwAutomation
 
                 // Example: Generate two parts and an assembly (uncomment after creating swApp and output folder).
                 // Args: outFolder=directory where files are saved.
-                // if (!Directory.Exists(outFolder)) Directory.CreateDirectory(outFolder); // Ensure folder exists.
-                // string partAPath = GeneratePart(swApp, "Part_A", "100", "50", "10", "5", "3", outFolder); // 100x50x10, 3 holes.
-                // string partBPath = GeneratePart(swApp, "Part_B", "80", "80", "20", "4", "2", outFolder); // 80x80x20, 2 holes.
-                // GenerateAssembly(swApp, partAPath, partBPath, outFolder); // Assemble and mate the two parts.
+                 if (!Directory.Exists(outFolder)) Directory.CreateDirectory(outFolder); // Ensure folder exists.
+                 string partAPath = GeneratePart(swApp, "Part_A", "100", "50", "10", "5", "3", outFolder); // 100x50x10, 3 holes.
+                 string partBPath = GeneratePart(swApp, "Part_B", "80", "80", "20", "4", "2", outFolder); // 80x80x20, 2 holes.
+                 GenerateAssembly(swApp, partAPath, partBPath, outFolder); // Assemble and mate the two parts.
 
                 // Example: Create offset planes in a new part (uncomment after creating swApp).
                 // Args: offsetDistance=distance in meters (0.05 = 50mm).
@@ -54,7 +54,7 @@ namespace SwAutomation
 
                 // Example: Create a Centered Rectangular Part.
                 // Inputs: Filename, Width (mm), Depth (mm), Height (mm), Output Folder.
-                 CreateCenteredRectangularPart(swApp, "RectPart_Centered", 120, 60, 20, outFolder);
+                // CreateCenteredRectangularPart(swApp, "RectPart_Centered", 120, 60, 20, outFolder);
 
                 // Example: Create a Centered Circular Part.
                 // Inputs: Filename, Diameter (mm), Height (mm), Output Folder.
@@ -130,6 +130,22 @@ namespace SwAutomation
             bool oldInputDimValHoles = swApp.GetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate);
             swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, false);
 
+            // Create Horizontal Centerline (Midline) for robust vertical definition.
+            // Draws from left edge midpoint to right edge midpoint.
+            swModel.SketchManager.CreateLine(-(x / 2000), 0, 0, (x / 2000), 0, 0);
+
+            // Select the last created line (the centerline) to make it construction geometry.
+            // We select it slightly off-center to avoid conflicts with diagonals at 0,0.
+            swModel.ClearSelection2(true);
+            swModel.Extension.SelectByID2("", "SKETCHSEGMENT", (x / 4000), 0, 0, false, 0, null, 0);
+            swModel.SketchManager.CreateConstructionGeometry();
+
+            // Ensure it is coincident with the origin (redundant if drawn on 0,0 but ensures fully defined).
+            swModel.ClearSelection2(true);
+            swModel.Extension.SelectByID2("", "SKETCHSEGMENT", (x / 4000), 0, 0, false, 0, null, 0);
+            swModel.Extension.SelectByID2("Point1@Origin", "EXTSKETCHPOINT", 0, 0, 0, true, 0, null, 0);
+            swModel.SketchAddConstraints("sgCOINCIDENT");
+
             // Create Holes: Calculate spacing based on count and draw circles; alternative: use Hole Wizard API.
             // Args: sDia=string hole diameter; out hDia=parsed diameter; sCount=string count; out hCount=parsed count.
             if (double.TryParse(sDia, out double hDia) && int.TryParse(sCount, out int hCount) && hCount > 0)
@@ -165,14 +181,14 @@ namespace SwAutomation
                     // Add horizontal dimension.
                     swModel.AddDimension2(centerX, -0.01, 0);
 
-                    // Add Smart Dimension for Y Position (Vertical from Origin) to lock it to 0.
+                    // Constrain Hole Center to the Centerline (Coincident) to fully define vertical position.
+                    swModel.ClearSelection2(true);
                     // Select the circle center.
                     swModel.Extension.SelectByID2("", "SKETCHPOINT", centerX, 0, 0, false, 0, null, 0);
-                    // Select the Origin.
-                    swModel.Extension.SelectByID2("Point1@Origin", "EXTSKETCHPOINT", 0, 0, 0, true, 0, null, 0);
-                    // Add vertical dimension; this will be 0, effectively locking it to the axis.
-                    // Alternatively, could use a geometric relation (Coincident) to the X-axis/Top Plane normal.
-                    swModel.AddDimension2(centerX + 0.01, 0, 0);
+                    // Select the Centerline (select slightly off-center to hit the horizontal line safely).
+                    swModel.Extension.SelectByID2("", "SKETCHSEGMENT", (x / 4000), 0, 0, true, 0, null, 0);
+                    // Add Coincident constraint.
+                    swModel.SketchAddConstraints("sgCOINCIDENT");
                 }
             }
 
