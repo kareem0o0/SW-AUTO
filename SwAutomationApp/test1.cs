@@ -37,10 +37,10 @@ namespace SwAutomation
 
                 // Example: Generate two parts and an assembly (uncomment after creating swApp and output folder).
                 // Args: outFolder=directory where files are saved.
-                 if (!Directory.Exists(outFolder)) Directory.CreateDirectory(outFolder); // Ensure folder exists.
-                 string partAPath = GeneratePart(swApp, "Part_A", "100", "50", "10", "5", "3", outFolder); // 100x50x10, 3 holes.
-                 string partBPath = GeneratePart(swApp, "Part_B", "80", "80", "20", "4", "2", outFolder); // 80x80x20, 2 holes.
-                 GenerateAssembly(swApp, partAPath, partBPath, outFolder); // Assemble and mate the two parts.
+                if (!Directory.Exists(outFolder)) Directory.CreateDirectory(outFolder); // Ensure folder exists.
+                string partAPath = GeneratePart(swApp, "Part_A", "100", "50", "10", "5", "3", outFolder); // 100x50x10, 3 holes.
+                string partBPath = GeneratePart(swApp, "Part_B", "80", "80", "20", "4", "2", outFolder); // 80x80x20, 2 holes.
+                GenerateAssembly(swApp, partAPath, partBPath, outFolder); // Assemble and mate the two parts.
 
                 // Example: Create offset planes in a new part (uncomment after creating swApp).
                 // Args: offsetDistance=distance in meters (0.05 = 50mm).
@@ -188,7 +188,7 @@ namespace SwAutomation
                     // Select the Centerline (select slightly off-center to hit the horizontal line safely).
                     swModel.Extension.SelectByID2("", "SKETCHSEGMENT", (x / 4000), 0, 0, true, 0, null, 0);
                     // Add Coincident constraint.
-                    swModel.SketchAddConstraints("sgCOINCIDENT");
+                    swModel.SketchAddCons raints("sgCOINCIDENT");
                 }
             }
 
@@ -209,6 +209,21 @@ namespace SwAutomation
             // 20) true=feature scope auto, 21) 0=thin wall thickness, 22) 0=thin wall thickness2,
             // 23) false=thin wall reversed.
             swModel.FeatureManager.FeatureExtrusion2(true, false, false, (int)swEndConditions_e.swEndCondBlind, 0, z / 1000, 0, false, false, false, false, 0, 0, false, false, false, false, true, true, true, 0, 0, false);
+
+            // Add Fillet to 1 Edge (Simplified for debugging).
+            // Edge 1: Top-Front (Midpoint).
+            swModel.ClearSelection2(true);
+            // Mark parameter (7th arg) must be 1 for FeatureFillet3 input.
+            // Args: 0, (y/2000), 0, false, 1, null, 0.
+            swModel.Extension.SelectByID2("", "EDGE", (x/2000), (y / 2000), 0, false, 1, null, 0);
+
+            // Edge 2 & 3 commented out for debugging.
+            // swModel.Extension.SelectByID2("", "EDGE", (x / 2000), 0, 0, true, 0, null, 0); 
+            // swModel.Extension.SelectByID2("", "EDGE", 0, (y / 2000), (z / 1000), true, 0, null, 0);
+
+            // Args: 1 (Propagate), Radius (0.005m = 5mm), Constrain (0), Options (0), ...
+            // FeatureFillet3 usage: (Options, R1, R2, R3, EqVariance, Option, Gluer, Radii, SetbackDistances, HelpPoint, CurveFeatures, EdgeFeatures, FaceFeatures, VertexFeatures).
+            swModel.FeatureManager.FeatureFillet3((int)swFeatureFilletOptions_e.swFeatureFilletUniformRadius, 0.005, 0, 0, 0, 0, 0, null, null, null, null, null, null, null);
 
             // Save the part to the specified folder; alternative: check SaveAs3 return codes.
             // Args: folder=parent directory; name+".SLDPRT"=file name.
