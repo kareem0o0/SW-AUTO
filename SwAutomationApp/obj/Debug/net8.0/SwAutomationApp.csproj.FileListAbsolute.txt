@@ -13,3 +13,19 @@ D:\work\birr machines\SwAutomationApp\obj\Debug\net8.0\refint\SwAutomationApp.dl
 D:\work\birr machines\SwAutomationApp\obj\Debug\net8.0\SwAutomationApp.pdb
 D:\work\birr machines\SwAutomationApp\obj\Debug\net8.0\SwAutomationApp.genruntimeconfig.cache
 D:\work\birr machines\SwAutomationApp\obj\Debug\net8.0\ref\SwAutomationApp.dll
+C:\Users\kareem.salah\Downloads\birr machines\birr machines\SwAutomationApp\obj\Debug\net8.0\SwAutomationApp.csproj.AssemblyReference.cache
+C:\Users\kareem.salah\Downloads\birr machines\birr machines\SwAutomationApp\obj\Debug\net8.0\SwAutomationApp.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\kareem.salah\Downloads\birr machines\birr machines\SwAutomationApp\obj\Debug\net8.0\SwAutomationApp.AssemblyInfoInputs.cache
+C:\Users\kareem.salah\Downloads\birr machines\birr machines\SwAutomationApp\obj\Debug\net8.0\SwAutomationApp.AssemblyInfo.cs
+C:\Users\kareem.salah\Downloads\birr machines\birr machines\SwAutomationApp\obj\Debug\net8.0\SwAutomationApp.csproj.CoreCompileInputs.cache
+C:\Users\kareem.salah\Downloads\birr machines\birr machines\SwAutomationApp\obj\Debug\net8.0\SwAutomationApp.sourcelink.json
+C:\Users\kareem.salah\Downloads\birr machines\birr machines\SwAutomationApp\obj\Debug\net8.0\SwAutomationApp.dll
+C:\Users\kareem.salah\Downloads\birr machines\birr machines\SwAutomationApp\obj\Debug\net8.0\refint\SwAutomationApp.dll
+C:\Users\kareem.salah\Downloads\birr machines\birr machines\SwAutomationApp\obj\Debug\net8.0\SwAutomationApp.pdb
+C:\Users\kareem.salah\Downloads\birr machines\birr machines\SwAutomationApp\bin\Debug\net8.0\SwAutomationApp.exe
+C:\Users\kareem.salah\Downloads\birr machines\birr machines\SwAutomationApp\bin\Debug\net8.0\SwAutomationApp.deps.json
+C:\Users\kareem.salah\Downloads\birr machines\birr machines\SwAutomationApp\bin\Debug\net8.0\SwAutomationApp.runtimeconfig.json
+C:\Users\kareem.salah\Downloads\birr machines\birr machines\SwAutomationApp\bin\Debug\net8.0\SwAutomationApp.dll
+C:\Users\kareem.salah\Downloads\birr machines\birr machines\SwAutomationApp\bin\Debug\net8.0\SwAutomationApp.pdb
+C:\Users\kareem.salah\Downloads\birr machines\birr machines\SwAutomationApp\obj\Debug\net8.0\SwAutomationApp.genruntimeconfig.cache
+C:\Users\kareem.salah\Downloads\birr machines\birr machines\SwAutomationApp\obj\Debug\net8.0\ref\SwAutomationApp.dll
