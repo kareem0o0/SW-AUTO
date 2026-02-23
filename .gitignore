@@ -6,7 +6,7 @@ obj/
 *.user
 *.suo
 *.userosscache
-
+!USER_GUIDE.md
 # Visual Studio cache/options
 .vs/
 

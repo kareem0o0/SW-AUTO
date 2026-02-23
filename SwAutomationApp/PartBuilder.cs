@@ -22,7 +22,8 @@ public sealed class PartBuilder
     }
 
     // Generate a part with rectangular base and optional hole pattern.
-    public string GeneratePart(PartParameters parameters, string folder)
+    // This method explicitly describes the produced geometry.
+    public string GenerateRectangularPartWithHoles(PartParameters parameters, string folder)
     {
         try
         {
@@ -138,8 +139,97 @@ public sealed class PartBuilder
         catch (Exception ex)
         {
             // Bubble a critical generation failure to Program.Main.
-            throw new InvalidOperationException("Part generation failed for '" + parameters.Name + "'.", ex);
+            throw new InvalidOperationException("Rectangular part generation failed for '" + parameters.Name + "'.", ex);
         }
+    }
+
+    // Backward-compatible alias.
+    // Prefer using GenerateRectangularPartWithHoles for clearer intent.
+    public string GeneratePart(PartParameters parameters, string folder)
+    {
+        return GenerateRectangularPartWithHoles(parameters, folder);
+    }
+
+    // Start a new blank part and begin a sketch on the requested base plane.
+    // Caller can add sketch geometry, then use ExtrudeExistingSketchAndSave.
+    public ModelDoc2 GeneratePart(string partName, SketchPlaneName sketchPlane = SketchPlaneName.Front)
+    {
+        if (string.IsNullOrWhiteSpace(partName)) throw new ArgumentException("Part name is required.", nameof(partName));
+
+        string template = _swApp.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplatePart);
+        ModelDoc2 swModel = (ModelDoc2)_swApp.NewDocument(template, 0, 0, 0);
+
+        string[] preferredPlaneNames = GetSketchPlaneCandidates(sketchPlane);
+        bool basePlaneSelected = SelectPartPlane(swModel, preferredPlaneNames, false);
+        if (!basePlaneSelected)
+        {
+            basePlaneSelected = SelectFirstReferencePlane(swModel, false);
+            if (!basePlaneSelected)
+            {
+                throw new InvalidOperationException("Failed to select base sketch plane while starting part.");
+            }
+        }
+
+        swModel.SketchManager.InsertSketch(true);
+        Console.WriteLine("Started part '" + partName + "' sketch on " + sketchPlane + " plane.");
+        return swModel;
+    }
+
+    // Extrude an existing sketch in the provided part document and save.
+    // Expected flow:
+    // 1) GeneratePart(partName, plane)
+    // 2) create sketch entities in the active sketch
+    // 3) call this method to close sketch (if open), extrude, and save.
+    public string ExtrudeExistingSketchAndSave(
+        ModelDoc2 partModel,
+        string partName,
+        string outputFolder,
+        double depthMm,
+        bool midPlane = false)
+    {
+        if (partModel == null) throw new ArgumentNullException(nameof(partModel));
+        if (string.IsNullOrWhiteSpace(partName)) throw new ArgumentException("Part name is required.", nameof(partName));
+        if (string.IsNullOrWhiteSpace(outputFolder)) throw new ArgumentException("Output folder is required.", nameof(outputFolder));
+        if (depthMm <= 0) throw new ArgumentOutOfRangeException(nameof(depthMm), "depthMm must be > 0.");
+
+        if (!Directory.Exists(outputFolder)) Directory.CreateDirectory(outputFolder);
+
+        // If sketch is currently open, close it before extrusion.
+        Sketch activeSketch = partModel.GetActiveSketch2();
+        if (activeSketch != null)
+        {
+            partModel.SketchManager.InsertSketch(true);
+        }
+
+        Feature sketchFeature = GetLastSketchFeature(partModel);
+        if (sketchFeature == null || !sketchFeature.Select2(false, 0))
+        {
+            throw new InvalidOperationException("No valid existing sketch was found for extrusion.");
+        }
+
+        int endCondition = midPlane
+            ? (int)swEndConditions_e.swEndCondMidPlane
+            : (int)swEndConditions_e.swEndCondBlind;
+
+        Feature createdExtrude = partModel.FeatureManager.FeatureExtrusion2(
+            true, false, false,
+            endCondition, 0,
+            depthMm / 1000.0, 0,
+            false, false, false, false,
+            0, 0, false, false, false, false,
+            true, true, true, 0, 0, false);
+
+        if (createdExtrude == null)
+        {
+            throw new InvalidOperationException("Extrusion failed for the existing sketch.");
+        }
+
+        partModel.ForceRebuild3(false);
+
+        string fullPath = Path.Combine(outputFolder, partName + ".SLDPRT");
+        partModel.SaveAs3(fullPath, (int)swSaveAsVersion_e.swSaveAsCurrentVersion, (int)swSaveAsOptions_e.swSaveAsOptions_Silent);
+
+        return fullPath;
     }
 
     // Create a new part and add two offset planes on opposite sides of the Right Plane.
@@ -280,6 +370,205 @@ public sealed class PartBuilder
         }
     }
 
+    // Mirror a selected part feature/body about a selected mirror plane.
+    // Example:
+    //   partBuilder.MirrorPartFeature(
+    //       partPath,
+    //       new SketchEntityReference("PLANE", 0, 0, 0, "Front Plane"),
+    //       new SketchEntityReference("BODYFEATURE", 0, 0, 0, "Boss-Extrude1"));
+    public void MirrorPartFeature(
+        string partPath,
+        SketchEntityReference mirrorPlaneReference,
+        SketchEntityReference seedFeatureReference,
+        bool geometryPattern = true,
+        bool merge = true,
+        bool knit = false,
+        int scopeOptions = 0)
+    {
+        try
+        {
+            ModelDoc2 swModel = OpenPartDocument(partPath);
+            if (swModel == null)
+            {
+                Console.WriteLine("MirrorPartFeature skipped: target part could not be opened.");
+                return;
+            }
+
+            swModel.ClearSelection2(true);
+
+            bool seedSelected = SelectInPart(swModel, seedFeatureReference, false, 0);
+            if (!seedSelected)
+            {
+                Console.WriteLine("MirrorPartFeature skipped: failed to select seed feature/body.");
+                return;
+            }
+
+            bool planeSelected = SelectInPart(swModel, mirrorPlaneReference, true, 0);
+            if (!planeSelected)
+            {
+                Console.WriteLine("MirrorPartFeature skipped: failed to select mirror plane.");
+                return;
+            }
+
+            Feature mirrored = swModel.FeatureManager.InsertMirrorFeature2(false, geometryPattern, merge, knit, scopeOptions);
+            if (mirrored == null)
+            {
+                Console.WriteLine("MirrorPartFeature warning: mirror feature could not be created.");
+            }
+
+            SaveAndRebuildPart(swModel);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException("Failed to create mirrored part feature for '" + partPath + "'.", ex);
+        }
+    }
+
+    // Create linear pattern for a selected part feature/body.
+    // Example:
+    //   partBuilder.CreatePartLinearPattern(
+    //       partPath,
+    //       new SketchEntityReference("BODYFEATURE", 0, 0, 0, "Boss-Extrude1"),
+    //       new SketchEntityReference("EDGE", 0, 0, 0),
+    //       4,
+    //       20);
+    public void CreatePartLinearPattern(
+        string partPath,
+        SketchEntityReference seedFeatureReference,
+        SketchEntityReference direction1Reference,
+        int count1,
+        double spacing1Mm,
+        SketchEntityReference direction2Reference = default,
+        int count2 = 1,
+        double spacing2Mm = 0,
+        bool flipDir1 = false,
+        bool flipDir2 = false)
+    {
+        try
+        {
+            if (count1 < 1) throw new ArgumentOutOfRangeException(nameof(count1), "count1 must be >= 1.");
+            if (count2 < 1) throw new ArgumentOutOfRangeException(nameof(count2), "count2 must be >= 1.");
+            if (spacing1Mm < 0) throw new ArgumentOutOfRangeException(nameof(spacing1Mm), "spacing1Mm must be >= 0.");
+            if (spacing2Mm < 0) throw new ArgumentOutOfRangeException(nameof(spacing2Mm), "spacing2Mm must be >= 0.");
+
+            ModelDoc2 swModel = OpenPartDocument(partPath);
+            if (swModel == null)
+            {
+                Console.WriteLine("CreatePartLinearPattern skipped: target part could not be opened.");
+                return;
+            }
+
+            swModel.ClearSelection2(true);
+
+            bool seedSelected = SelectInPart(swModel, seedFeatureReference, false, 0);
+            if (!seedSelected)
+            {
+                Console.WriteLine("CreatePartLinearPattern skipped: failed to select seed feature/body.");
+                return;
+            }
+
+            bool dir1Selected = SelectInPart(swModel, direction1Reference, true, 0);
+            if (!dir1Selected)
+            {
+                Console.WriteLine("CreatePartLinearPattern skipped: failed to select first direction reference.");
+                return;
+            }
+
+            if (direction2Reference.IsValid())
+            {
+                bool dir2Selected = SelectInPart(swModel, direction2Reference, true, 0);
+                if (!dir2Selected)
+                {
+                    Console.WriteLine("CreatePartLinearPattern skipped: failed to select second direction reference.");
+                    return;
+                }
+            }
+
+            Feature createdPattern = swModel.FeatureManager.FeatureLinearPattern(
+                count1,
+                spacing1Mm / 1000.0,
+                count2,
+                spacing2Mm / 1000.0,
+                flipDir1,
+                flipDir2,
+                string.Empty,
+                string.Empty);
+
+            if (createdPattern == null)
+            {
+                Console.WriteLine("CreatePartLinearPattern warning: linear pattern feature could not be created.");
+            }
+
+            SaveAndRebuildPart(swModel);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException("Failed to create linear pattern for '" + partPath + "'.", ex);
+        }
+    }
+
+    // Create circular pattern for a selected part feature/body.
+    // Example:
+    //   partBuilder.CreatePartCircularPattern(
+    //       partPath,
+    //       new SketchEntityReference("BODYFEATURE", 0, 0, 0, "Boss-Extrude1"),
+    //       new SketchEntityReference("AXIS", 0, 0, 0),
+    //       6,
+    //       60);
+    public void CreatePartCircularPattern(
+        string partPath,
+        SketchEntityReference seedFeatureReference,
+        SketchEntityReference axisReference,
+        int count,
+        double spacingDeg,
+        bool flipDir = false)
+    {
+        try
+        {
+            if (count < 1) throw new ArgumentOutOfRangeException(nameof(count), "count must be >= 1.");
+
+            ModelDoc2 swModel = OpenPartDocument(partPath);
+            if (swModel == null)
+            {
+                Console.WriteLine("CreatePartCircularPattern skipped: target part could not be opened.");
+                return;
+            }
+
+            swModel.ClearSelection2(true);
+
+            bool seedSelected = SelectInPart(swModel, seedFeatureReference, false, 0);
+            if (!seedSelected)
+            {
+                Console.WriteLine("CreatePartCircularPattern skipped: failed to select seed feature/body.");
+                return;
+            }
+
+            bool axisSelected = SelectInPart(swModel, axisReference, true, 0);
+            if (!axisSelected)
+            {
+                Console.WriteLine("CreatePartCircularPattern skipped: failed to select axis reference.");
+                return;
+            }
+
+            Feature createdPattern = swModel.FeatureManager.FeatureCircularPattern(
+                count,
+                spacingDeg * Math.PI / 180.0,
+                flipDir,
+                string.Empty);
+
+            if (createdPattern == null)
+            {
+                Console.WriteLine("CreatePartCircularPattern warning: circular pattern feature could not be created.");
+            }
+
+            SaveAndRebuildPart(swModel);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException("Failed to create circular pattern for '" + partPath + "'.", ex);
+        }
+    }
+
     // Try selecting a part plane from multiple localized names.
     private static bool SelectPartPlane(ModelDoc2 partModel, string[] planeNames, bool append)
     {
@@ -290,6 +579,70 @@ public sealed class PartBuilder
         }
 
         return false;
+    }
+
+    // Return the latest sketch feature in the feature tree.
+    private static Feature GetLastSketchFeature(ModelDoc2 model)
+    {
+        Feature feat = model.FirstFeature();
+        Feature lastSketch = null;
+        while (feat != null)
+        {
+            string type = feat.GetTypeName2();
+            if (string.Equals(type, "ProfileFeature", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(type, "3DProfileFeature", StringComparison.OrdinalIgnoreCase))
+            {
+                lastSketch = feat;
+            }
+
+            feat = feat.GetNextFeature();
+        }
+
+        return lastSketch;
+    }
+
+    // Open an existing part document silently.
+    private ModelDoc2 OpenPartDocument(string partPath)
+    {
+        if (string.IsNullOrWhiteSpace(partPath))
+        {
+            throw new ArgumentException("Part path is required.", nameof(partPath));
+        }
+
+        int errors = 0;
+        int warnings = 0;
+        return _swApp.OpenDoc6(
+            partPath,
+            (int)swDocumentTypes_e.swDocPART,
+            (int)swOpenDocOptions_e.swOpenDocOptions_Silent,
+            string.Empty,
+            ref errors,
+            ref warnings);
+    }
+
+    // Select an entity in part using typed reference data.
+    private static bool SelectInPart(ModelDoc2 model, SketchEntityReference reference, bool append, int mark)
+    {
+        if (!reference.IsValid()) return false;
+        return model.Extension.SelectByID2(
+            reference.Name ?? string.Empty,
+            reference.Type,
+            reference.XMm / 1000.0,
+            reference.YMm / 1000.0,
+            reference.ZMm / 1000.0,
+            append,
+            mark,
+            null,
+            0);
+    }
+
+    // Rebuild and save part document silently.
+    private static void SaveAndRebuildPart(ModelDoc2 model)
+    {
+        model.ForceRebuild3(false);
+        int errors = 0;
+        int warnings = 0;
+        model.Save3((int)swSaveAsOptions_e.swSaveAsOptions_Silent, ref errors, ref warnings);
     }
 
     // Return localized plane-name candidates for requested sketch plane option.

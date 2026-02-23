@@ -142,6 +142,11 @@ public static class Examples // Expose reusable runnable examples without needin
             _ = sketchBuilder; // Mark sketchBuilder as intentionally unused in this example.
             _ = outFolder; // Mark output folder as intentionally unused in this example.
             partBuilder.CreatePartWithOffsetPlanes(0.05); // Create two offset planes at 0.05 m (50 mm).
+
+            // Start-part + extrude-existing-sketch flow example:
+            // ModelDoc2 partModel = partBuilder.GeneratePart("StartedPart_1", SketchPlaneName.Front);
+            // partModel.SketchManager.CreateCenterRectangle(0, 0, 0, 0.02, 0.01, 0); // meters in raw COM call (20x10 mm)
+            // string startedPartPath = partBuilder.ExtrudeExistingSketchAndSave(partModel, "StartedPart_1", outFolder, 12, midPlane: false);
         });
     }
 
@@ -157,49 +162,83 @@ public static class Examples // Expose reusable runnable examples without needin
             partBuilder.CreateReferenceOffsetPlane(rectPartPath, "Front", 0.10); // Add 100 mm offset from Front plane.
             partBuilder.CreateReferenceOffsetPlane(rectPartPath, "Top", 0.05); // Add 50 mm offset from Top plane.
             partBuilder.CreateReferenceOffsetPlane(rectPartPath, "Right", 0.02); // Add 20 mm offset from Right plane.
+
+            // Part mirror example:
+            // partBuilder.MirrorPartFeature(
+            //     rectPartPath,
+            //     new SketchEntityReference("PLANE", 0, 0, 0, "Front Plane"),
+            //     new SketchEntityReference("BODYFEATURE", 0, 0, 0, "Boss-Extrude1"));
+
+            // Part linear pattern example:
+            // partBuilder.CreatePartLinearPattern(
+            //     rectPartPath,
+            //     new SketchEntityReference("BODYFEATURE", 0, 0, 0, "Boss-Extrude1"),
+            //     new SketchEntityReference("EDGE", 0, 0, 0),
+            //     4,
+            //     20);
+
+            // Part circular pattern example:
+            // partBuilder.CreatePartCircularPattern(
+            //     rectPartPath,
+            //     new SketchEntityReference("BODYFEATURE", 0, 0, 0, "Boss-Extrude1"),
+            //     new SketchEntityReference("AXIS", 0, 0, 0),
+            //     6,
+            //     60);
         });
     }
 
-    // Demonstrate full sketch workflow: create sketch entities, relations, and extrusion.
     public static void RunSketchWorkflow()
     {
-        // Execute this example inside a managed SOLIDWORKS session.
         RunWithSession((partBuilder, assemblyBuilder, sketchBuilder, outFolder) =>
         {
-            _ = partBuilder; // Mark partBuilder as intentionally unused in this sketch-only workflow.
-            _ = assemblyBuilder; // Mark assemblyBuilder as intentionally unused in this sketch-only workflow.
+            _ = partBuilder;
+            _ = assemblyBuilder;
 
-            sketchBuilder.BeginPartSketch("SketchPart_1", outFolder, SketchPlaneName.Front); // Create part and start sketch on Front plane.
-            sketchBuilder.CreateRectangle(SketchRectangleType.Center, 0, 0, 40, 20); // Add center rectangle (mm coordinates).
-            sketchBuilder.CreateCircle(SketchCircleType.CenterRadius, 0, 0, 8); // Add center-radius circle at origin.
-            sketchBuilder.CreateLine(SketchLineType.Centerline, -40, 0, 40, 0); // Add horizontal centerline.
-            sketchBuilder.CreateLine(SketchLineType.Construction, -25, -20, -25, 20); // Add vertical construction line.
-            sketchBuilder.CreateLine(SketchLineType.Standard, -40, -20, 40, -20); // Add lower standard line.
-            sketchBuilder.CreateLine(SketchLineType.Standard, -40, 20, 40, 20); // Add upper standard line.
-            sketchBuilder.CreatePoint(SketchPointType.Standard, 0, 0); // Add standard point at origin.
-            sketchBuilder.CreatePoint(
-                SketchPointType.Midpoint,
-                0,
-                -20,
-                new SketchEntityReference("SKETCHSEGMENT", 0, -20)); // Add midpoint-constrained point on referenced segment.
-            sketchBuilder.ApplySketchRelation(
-                SketchRelationType.Parallel,
-                new SketchEntityReference("SKETCHSEGMENT", 0, -20),
-                new SketchEntityReference("SKETCHSEGMENT", 0, 20)); // Make the two segments parallel.
-            sketchBuilder.CreateSketchFillet(
-                5,
-                new SketchEntityReference("SKETCHSEGMENT", -40, -20),
-                new SketchEntityReference("SKETCHSEGMENT", -40, 20)); // Add 5 mm sketch fillet between two segments.
-            sketchBuilder.CreateSketchChamfer(
-                SketchChamferMode.DistanceAngle,
-                4,
-                45,
-                new SketchEntityReference("SKETCHSEGMENT", 40, -20),
-                new SketchEntityReference("SKETCHSEGMENT", 40, 20)); // Add distance-angle chamfer (4 mm, 45 deg).
-            sketchBuilder.AddDimension(0, 25, 0); // Place one dimension annotation at this text location.
-            sketchBuilder.EndSketch(); // Exit sketch edit mode.
-            sketchBuilder.Extrude(12, midPlane: false); // Blind extrude sketch by 12 mm.
-            sketchBuilder.SaveAndClose(closeDocument: false); // Save part and keep it open.
+            sketchBuilder.BeginPartSketch("ComprehensiveSketchPart", outFolder, SketchPlaneName.Front);
+            
+            sketchBuilder.CreateRectangle(SketchRectangleType.Center, 0, 0, 50, 50);
+            sketchBuilder.CreateCircle(SketchCircleType.CenterRadius, 0, 0, 15);
+            sketchBuilder.CreateCircle(SketchCircleType.CenterPoint, 25, 0, 30, 0);
+            
+            sketchBuilder.CreateLine(SketchLineType.Centerline, -60, 0, 60, 0);
+            sketchBuilder.CreateLine(SketchLineType.Construction, 0, -60, 0, 60);
+            
+            sketchBuilder.CreateLine(SketchLineType.Standard, 60, -20, 80, -20);
+            sketchBuilder.CreateLine(SketchLineType.Standard, 80, -20, 80, 20);
+            sketchBuilder.CreateLine(SketchLineType.Standard, 80, 20, 60, 20);
+            sketchBuilder.CreateLine(SketchLineType.Standard, 60, 20, 60, -20);
+            
+            sketchBuilder.CreatePoint(-25, 25);
+
+            sketchBuilder.ApplySketchRelation(SketchRelationType.Vertical, new SketchEntityReference(80, 0));
+
+            // Sketch mirror example:
+            // sketchBuilder.MirrorSketchEntities(
+            //     new SketchEntityReference("SKETCHSEGMENT", 0, 0),
+            //     new SketchEntityReference("SKETCHSEGMENT", 60, -20),
+            //     new SketchEntityReference("SKETCHSEGMENT", 80, -20),
+            //     new SketchEntityReference("SKETCHSEGMENT", 80, 20),
+            //     new SketchEntityReference("SKETCHSEGMENT", 60, 20));
+
+            // Sketch linear pattern example:
+            // sketchBuilder.CreateLinearSketchPattern(
+            //     3, 1, 20, 0, 0, 90, "",
+            //     new SketchEntityReference("SKETCHSEGMENT", 60, -20));
+
+            // Sketch circular pattern example:
+            // sketchBuilder.CreateCircularSketchPattern(
+            //     40, 180, 6, 30, false, "",
+            //     new SketchEntityReference("SKETCHSEGMENT", 60, -20));
+
+            sketchBuilder.CreateSketchFillet(5, new SketchEntityReference(-50, 50));
+            sketchBuilder.CreateSketchChamfer(SketchChamferMode.DistanceDistance, 5, new SketchEntityReference(50, 50));
+            
+            sketchBuilder.AddDimension(0, 50, 0, 60, 0);
+            sketchBuilder.AddDimension(60, 0, 80, 0, 70, 30, 0);
+            
+            sketchBuilder.EndSketch();
+            sketchBuilder.Extrude(15, midPlane: true); // Circular results auto-create Face_* helper planes.
+            sketchBuilder.SaveAndClose(closeDocument: false);
         });
     }
 
@@ -237,7 +276,50 @@ public static class Examples // Expose reusable runnable examples without needin
         PartParameters partAParameters = new PartParameters("Part_A", 100, 50, 10, 5, 3, SketchPlaneName.Front); // Define Part_A dimensions and hole pattern.
         PartParameters partBParameters = new PartParameters("Part_B", 80, 80, 20, 4, 2, SketchPlaneName.Top); // Define Part_B dimensions and hole pattern.
 
-        partAPath = partBuilder.GeneratePart(partAParameters, outFolder); // Create Part_A and capture saved path.
-        partBPath = partBuilder.GeneratePart(partBParameters, outFolder); // Create Part_B and capture saved path.
+        partAPath = partBuilder.GenerateRectangularPartWithHoles(partAParameters, outFolder); // Create Part_A and capture saved path.
+        partBPath = partBuilder.GenerateRectangularPartWithHoles(partBParameters, outFolder); // Create Part_B and capture saved path.
+    }
+    public static void Playground()
+    {
+        // Execute this example inside a managed SOLIDWORKS session.
+        RunWithSession((partBuilder, assemblyBuilder, sketchBuilder, outFolder) =>
+        {
+            _ = partBuilder; // Mark partBuilder as intentionally unused in this sketch-only workflow.
+            _ = assemblyBuilder; // Mark assemblyBuilder as intentionally unused in this sketch-only workflow.
+
+            sketchBuilder.BeginPartSketch("SketchPart_1", outFolder, SketchPlaneName.Front); // Create part and start sketch on Front plane.
+            sketchBuilder.CreateRectangle(SketchRectangleType.Center, 0, 0, 40, 20); // Add center rectangle (mm coordinates).
+            sketchBuilder.CreateCircle(SketchCircleType.CenterRadius, 0, 0, 8); // Add center-radius circle at origin.
+            //sketchBuilder.CreateLine(SketchLineType.Centerline, -40, 0, 40, 0); // Add horizontal centerline.
+            //sketchBuilder.CreateLine(SketchLineType.Construction, -25, -20, -25, 20); // Add vertical construction line.
+            //sketchBuilder.CreateLine(SketchLineType.Standard, -40, -20, 40, -20); // Add lower standard line.
+            //sketchBuilder.CreateLine(SketchLineType.Standard, -40, 20, 40, 20); // Add upper standard line.
+            //sketchBuilder.CreatePoint(0, 0); // Add standard point at origin.
+            //sketchBuilder.CreatePoint(0, -20); // Add second standard point.
+            //sketchBuilder.ApplySketchRelation(
+            //    SketchRelationType.Parallel,
+            //    new SketchEntityReference("SKETCHSEGMENT", 0, 10),
+            //    new SketchEntityReference("SKETCHSEGMENT", -25, 0)); // Make the two segments parallel.
+           // sketchBuilder.CreateSketchFillet(
+              //  5,
+              //  new SketchEntityReference("SKETCHSEGMENT", -40, -20),
+              //  new SketchEntityReference("SKETCHSEGMENT", -40, 20)); // Add 5 mm sketch fillet between two segments.
+            // Single-edge/point fillet mode (optional): only first reference is needed.
+            sketchBuilder.CreateSketchFillet(3, new SketchEntityReference(-40, -20)); // Default type = SKETCHPOINT.
+            sketchBuilder.CreateSketchChamfer(
+                SketchChamferMode.DistanceDistance,
+                4,
+                new SketchEntityReference(40, -20)); // Equal-distance chamfer using one corner point (default type = SKETCHPOINT).
+            // Two-distance chamfer example (requires both values):
+            // sketchBuilder.CreateSketchChamfer(SketchChamferMode.DistanceDistance, 4, 6, new SketchEntityReference("SKETCHPOINT", 40, -20));
+            // Single-edge/point chamfer mode (optional): only first reference is needed.
+            // sketchBuilder.CreateSketchChamfer(SketchChamferMode.DistanceAngle, 2, 45, new SketchEntityReference("SKETCHPOINT", 40, -20));
+            //sketchBuilder.AddDimension(-40, 20, 40, 20, 0, 30, 0); // AddDimension(firstX, firstY, secondX, secondY, textX, textY, textZ): dimension between points (-40,20) and (40,20), with text at (0,30,0).
+            // Single-entity Smart Dimension example (line/circle/arc, inferred from one pick):
+            sketchBuilder.AddDimension(40, 0, 50, 0, 0);
+            sketchBuilder.EndSketch(); // Exit sketch edit mode.
+            sketchBuilder.Extrude(12, midPlane: false); // Blind extrude sketch by 12 mm.
+            sketchBuilder.SaveAndClose(closeDocument: false); // Save part and keep it open.
+        });
     }
 }

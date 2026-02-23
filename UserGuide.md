@@ -1,4 +1,4 @@
-# SOLIDWORKS Automation User Guide (Program.cs Flow)
+﻿# SOLIDWORKS Automation User Guide (Program.cs Flow)
 
 ## 1. How to use this project now
 Use the project by editing `SwAutomationApp/Program.cs`.
