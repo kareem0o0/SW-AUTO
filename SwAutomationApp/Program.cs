@@ -41,6 +41,7 @@ public static class Program
             // If you get this before BeginPartSketch, it might be null or point to a previous file.
             ModelDoc2 swModel = (ModelDoc2)session.Application.ActiveDoc;
             SelectionMgr selMgr = swModel.SelectionManager;
+            sketchBuilder.DisableSketchInference();
 
             sketchBuilder.CreateCircle(SketchCircleType.CenterRadius, 0, 0, 600); // x, y, R
             sketchBuilder.CreateCircle(SketchCircleType.CenterRadius, 0, 0, 625/2.0); // x, y, R
@@ -52,12 +53,12 @@ public static class Program
             sketchBuilder.EndSketch();
             sketchBuilder.Extrude(8, midPlane: false, isCut: false); // args: (depthMm, midPlane, isCut)
             sketchBuilder.BeginSketch(new SketchEntityReference("FACE", 250, 0, 8));
-            sketchBuilder.CreateRectangle(SketchRectangleType.Center, 0, 364.75, 8.25, 64.75);
-            sketchBuilder.CreateSketchTrim(-8, 300, 8, 0); // args: (xMm, yMm, zMm, trimMode)
-            sketchBuilder.CreateLine(SketchLineType.Standard, 50, 100, 100, 150); // args: (lineType, startXmm, startYmm, endXmm, endYmm)
-            sketchBuilder.CreateCircle(SketchCircleType.CenterRadius, 800, 429.5, 625/2.0); // args: (circleType, centerXmm, centerYmm, radiusMm)
-            sketchBuilder.ApplySketchRelation(SketchRelationType.Parallel, -8.25, 350, 8.25, 350); // args: (relationType, firstXmm, firstYmm, secondXmm, secondYmm)
-            sketchBuilder.ApplySketchRelation(SketchRelationType.Vertical, new SketchEntityReference("SKETCHPOINT", -8.25, 350)); // args: (relationType, entityRef)
+            sketchBuilder.CreateRectangle(SketchRectangleType.Corner, -8.25, 300, 8.25, 429.5);
+            sketchBuilder.CreateLine(SketchLineType.Standard, 50, 100, 100, 150);
+            sketchBuilder.CreateCircle(SketchCircleType.CenterRadius, 800, 429.5, 625/2.0); sketchBuilder.CreateCircle(SketchCircleType.CenterRadius, 800, 429.5, 625/2.0); // args: (circleType, centerXmm, centerYmm, radiusMm)
+            //sketchBuilder.ApplySketchRelation(SketchRelationType.Parallel, -8.25, 350, 8.25, 350); // args: (relationType, firstXmm, firstYmm, secondXmm, secondYmm)
+            //sketchBuilder.ApplySketchRelation(SketchRelationType.Vertical, new SketchEntityReference("SKETCHPOINT", -8.25, 350)); // args: (relationType, entityRef)
+            sketchBuilder.EnableSketchInference();
         }
         catch (Exception ex)
         {

@@ -772,5 +772,16 @@ public void CreateSketchFillet(
         EnsureSketchOpen();
         return _sketchManager.ActiveSketch;
     }
+    public void DisableSketchInference()
+{
+    // Disable sketch snapping/inference
+    _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, false);
+}
+
+public void EnableSketchInference()
+{
+    // Re-enable sketch snapping/inference
+    _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, true);
+}
     
 }
