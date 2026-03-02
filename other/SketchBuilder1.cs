@@ -1192,7 +1192,7 @@ public sealed class SketchBuilder
         maxY = Math.Max(y1Mm, y2Mm);
     }
 
-/*
+
     // Create helper planes after extrusion based on resulting solid shape.
     private void TryCreateFaceDirectionPlanesAfterExtrude()
     {
@@ -1443,5 +1443,5 @@ public sealed class SketchBuilder
 
         return false;
     }
-*/
+
 }
