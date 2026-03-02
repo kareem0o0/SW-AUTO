@@ -208,6 +208,7 @@ public sealed class SketchBuilder
     {
         EnsureSketchOpen();
         _sketchManager.CreatePoint(xMm * MmToMeters, yMm * MmToMeters, 0);
+         _activeModel.ClearSelection2(true);
     }
 
     // KEEP THIS - Your code uses it
@@ -262,34 +263,36 @@ public sealed class SketchBuilder
     }
 
     // KEEP THIS - Convenience overload for point-based relations
-    public void ApplySketchRelation(SketchRelationType relationType, double firstXmm, double firstYmm, double secondXmm, double secondYmm)
+   public void ApplySketchRelation(SketchRelationType relationType, 
+                                double firstXmm, double firstYmm, string firstType,
+                                double secondXmm, double secondYmm, string secondType)
+{
+    EnsureSketchOpen();
+
+    _activeModel.ClearSelection2(true);
+
+    bool firstSelected = _activeModel.Extension.SelectByID2(
+        string.Empty, firstType, 
+        firstXmm * MmToMeters, firstYmm * MmToMeters, 0, 
+        false, 0, null, 0);
+        
+    if (!firstSelected)
+        throw new InvalidOperationException($"Failed to select first {firstType} at ({firstXmm}, {firstYmm})");
+
+    bool secondSelected = _activeModel.Extension.SelectByID2(
+        string.Empty, secondType, 
+        secondXmm * MmToMeters, secondYmm * MmToMeters, 0, 
+        true, 0, null, 0);
+        
+    if (!secondSelected)
     {
-        EnsureSketchOpen();
-
         _activeModel.ClearSelection2(true);
-
-        bool firstSelected = _activeModel.Extension.SelectByID2(
-            string.Empty, SketchPointType, 
-            firstXmm * MmToMeters, firstYmm * MmToMeters, 0, 
-            false, 0, null, 0);
-            
-        if (!firstSelected)
-            throw new InvalidOperationException($"Failed to select first point at ({firstXmm}, {firstYmm})");
-
-        bool secondSelected = _activeModel.Extension.SelectByID2(
-            string.Empty, SketchPointType, 
-            secondXmm * MmToMeters, secondYmm * MmToMeters, 0, 
-            true, 0, null, 0);
-            
-        if (!secondSelected)
-        {
-            _activeModel.ClearSelection2(true);
-            throw new InvalidOperationException($"Failed to select second point at ({secondXmm}, {secondYmm})");
-        }
-
-        _activeModel.SketchAddConstraints(GetConstraintToken(relationType));
-        _activeModel.ClearSelection2(true);
+        throw new InvalidOperationException($"Failed to select second {secondType} at ({secondXmm}, {secondYmm})");
     }
+
+    _activeModel.SketchAddConstraints(GetConstraintToken(relationType));
+    _activeModel.ClearSelection2(true);
+}
 
     // KEEP THIS - Your code uses it
     public bool DeleteSketchEntityAt(double xMm, double yMm, double zMm = double.NaN, string explicitType = "")
@@ -773,15 +776,33 @@ public void CreateSketchFillet(
         return _sketchManager.ActiveSketch;
     }
     public void DisableSketchInference()
-{
-    // Disable sketch snapping/inference
-    _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, false);
-}
+    {
+        // Disable sketch snapping/inference
+        _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, false);
+    }
 
-public void EnableSketchInference()
+    public void EnableSketchInference()
+    {
+        // Re-enable sketch snapping/inference
+        _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, true);
+    }
+    public bool SelectSketchPoint(double xMm, double yMm)
 {
-    // Re-enable sketch snapping/inference
-    _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, true);
-}
+    EnsureSketchOpen();
     
+    // Clear any existing selection
+    _activeModel.ClearSelection2(true);
+    
+    // Try to select the sketch point
+    bool selected = _activeModel.Extension.SelectByID2(
+        string.Empty, 
+        "SKETCHPOINT",
+        xMm * MmToMeters, 
+        yMm * MmToMeters, 
+        0, 
+        false, 0, null, 0);
+    
+    return selected;
+}
+        
 }
