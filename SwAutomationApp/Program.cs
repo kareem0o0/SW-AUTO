@@ -23,7 +23,7 @@ public static class Program
         var assembly = new Assembly(swApp);
 
         part.Create_stator_sheet(outFolder);
-       /* string skeleton = part.CreateSkeleton(sideOffset: 500.0, groundOffset: -250.0, outFolder: outFolder,closeAfterCreate: true); // values in mm
+       string skeleton = part.CreateSkeleton(sideOffset: 500.0, groundOffset: -250.0, outFolder: outFolder,closeAfterCreate: true); // values in mm
        /* assembly.CreateAssembly(outFolder, "RotorComplete.SLDASM", closeAfterCreate: true);
         assembly.CreateAssembly(outFolder, "StatorComplete.SLDASM", closeAfterCreate: true);
         assembly.CreateAssembly(outFolder, "HousingMachined.SLDASM", closeAfterCreate: true);
@@ -35,7 +35,7 @@ public static class Program
         swComponent = assembly.InsertComponentToOpenAssembly("StatorComplete.SLDASM");
         assembly.mate_plans(swComponent);
         swComponent = assembly.InsertComponentToOpenAssembly("HousingMachined.SLDASM");
-        assembly.mate_plans(swComponent);*/
+        assembly.mate_plans(swComponent);*///
         
     }
 }
