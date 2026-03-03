@@ -5,17 +5,17 @@ using SolidWorks.Interop.swconst;
 
 namespace SwAutomation;
 
-public sealed class Parts
+public sealed class Part
 {
     private readonly SldWorks _swApp;
     private const double MmToMeters = 0.001;
 
-    public Parts(SldWorks swApp)
+    public Part(SldWorks swApp)
     {
         _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
     }
 
-    public void creat_stator_sheet(string outFolder)
+    public string Create_stator_sheet(string outFolder, bool closeAfterCreate = false)
     {
         double Mm(double mm) => mm * MmToMeters;
 
@@ -242,6 +242,11 @@ public sealed class Parts
                 (int)swSaveAsOptions_e.swSaveAsOptions_Silent);
 
             Console.WriteLine($"Part saved to: {fullPath}");
+            if (closeAfterCreate)
+            {
+                _swApp.CloseDoc(swModel.GetTitle());
+                Console.WriteLine("Part closed after creating.");
+            }
             _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, true);
             Console.WriteLine("Done!");
         }
@@ -250,9 +255,10 @@ public sealed class Parts
             Console.WriteLine("Fatal error: " + ex.Message);
             try { _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, true); } catch { }
         }
+        return "StatorBleche.SLDPRT" ;
     }
 
-    public void CreateReferencePlanes(double sideOffset, double groundOffset, string outFolder)
+    public string CreateSkeleton(double sideOffset, double groundOffset, string outFolder, bool closeAfterCreate = false)
     {
         Directory.CreateDirectory(outFolder);
         string template = _swApp.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplatePart);
@@ -266,14 +272,14 @@ public sealed class Parts
             sideOffset * MmToMeters,
             0, 0, 0, 0);
         swModel.ClearSelection2(true);
-        sideRight.Name = "Side_Right";
+        sideRight.Name = "NDE_BEARING_CENTER";
 
         // Side_Left (always opposite of Side_Right)
         swModel.ClearSelection2(true);
         swModel.Extension.SelectByID2("Ebene rechts", "PLANE", 0, 0, 0, false, 0, null, 0);
         Feature sideLeft = swModel.FeatureManager.InsertRefPlane(264, sideOffset * MmToMeters,0, 0, 0, 0)
         ;swModel.ClearSelection2(true);
-        sideLeft.Name = "Side_Left";
+        sideLeft.Name = "DE_BEARING_CENTER";
 
         // Ground_Plane (signed value as provided)
         swModel.ClearSelection2(true);
@@ -300,12 +306,20 @@ public sealed class Parts
         }   
         
 
-        string fullPath = Path.Combine(outFolder, "ReferencePlanes.SLDPRT");
+        string fullPath = Path.Combine(outFolder, "skeleton.SLDPRT");
         swModel.SaveAs3(
             fullPath,
             (int)swSaveAsVersion_e.swSaveAsCurrentVersion,
             (int)swSaveAsOptions_e.swSaveAsOptions_Silent);
 
         Console.WriteLine($"Reference-plane part saved to: {fullPath}");
+        if (closeAfterCreate)
+        {
+            _swApp.CloseDoc(swModel.GetTitle());
+            Console.WriteLine("Part closed after creating.");
+        }
+
+        return "skeleton.SLDPRT";
     }
+    
 }

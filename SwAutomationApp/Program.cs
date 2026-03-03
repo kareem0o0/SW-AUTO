@@ -10,18 +10,32 @@ namespace SwAutomation;
 public static class Program
 {
     [STAThread]
+    
     public static void Main(string[] args)
     {
         string outFolder = @"C:\Users\kareem.salah\Downloads\birr machines\birr machines\parts";
         Console.WriteLine("Connecting to SOLIDWORKS...");
+        Component2 swComponent = null;
         SldWorks swApp = new SldWorks();
         swApp.Visible = true;
 
-        var parts = new Parts(swApp);
+        var part = new Part(swApp);
+        var assembly = new Assembly(swApp);
 
-        parts.creat_stator_sheet(outFolder);
-        parts.CreateReferencePlanes(sideOffset: 500.0, groundOffset: -250.0, outFolder: outFolder); // values in mm
-        
+        //part.Create_stator_sheet(outFolder);
+        string skeleton = part.CreateSkeleton(sideOffset: 500.0, groundOffset: -250.0, outFolder: outFolder,closeAfterCreate: true); // values in mm
+        assembly.CreateAssembly(outFolder, "RotorComplete.SLDASM", closeAfterCreate: true);
+        assembly.CreateAssembly(outFolder, "StatorComplete.SLDASM", closeAfterCreate: true);
+        assembly.CreateAssembly(outFolder, "HousingMachined.SLDASM", closeAfterCreate: true);
+        assembly.CreateAssembly(outFolder, "MachineAssembly.SLDASM", closeAfterCreate: false);
+        swComponent = assembly.InsertComponentToOpenAssembly(skeleton);
+        assembly.mate_plans(swComponent);
+        swComponent = assembly.InsertComponentToOpenAssembly("RotorComplete.SLDASM");
+        assembly.mate_plans(swComponent);
+        swComponent = assembly.InsertComponentToOpenAssembly("StatorComplete.SLDASM");
+        assembly.mate_plans(swComponent);
+        swComponent = assembly.InsertComponentToOpenAssembly("HousingMachined.SLDASM");
+        assembly.mate_plans(swComponent);
         
     }
 }
