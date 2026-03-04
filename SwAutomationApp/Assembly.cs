@@ -2,26 +2,31 @@ using System;
 using System.IO;
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
+using SwAutomation.Pdm;
 
 namespace SwAutomation;
 
 public sealed class Assembly
 {
     private readonly SldWorks _swApp;
+    private readonly PdmModule _pdm;
     private ModelDoc2 _model = null;
     private AssemblyDoc _assembly = null;
     private string _folder = string.Empty;
     private int _insertIndex = 0;
     private Component2 swComponent = null;
-    public Assembly(SldWorks swApp) => _swApp = swApp;
+    public Assembly(SldWorks swApp, PdmModule pdm)
+    {
+        _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
+        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
+    }
 
-    public void CreateAssembly(string outFolder, string fileName = "Assembly.SLDASM", bool closeAfterCreate = false)
+    public string CreateAssembly(string outFolder, string fileName = "Assembly.SLDASM", bool closeAfterCreate = false)
     {
         Directory.CreateDirectory(outFolder);
         string template = _swApp.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplateAssembly);
         ModelDoc2 model = (ModelDoc2)_swApp.NewDocument(template, 0, 0, 0);
-        string fullPath = Path.Combine(outFolder, fileName);
-        model.SaveAs3(fullPath, (int)swSaveAsVersion_e.swSaveAsCurrentVersion, (int)swSaveAsOptions_e.swSaveAsOptions_Silent);
+        string fullPath = _pdm.SaveAsPdm(model, outFolder);
 
         Console.WriteLine($"Assembly saved to: {fullPath}");
         _insertIndex = 0;
@@ -34,16 +39,17 @@ public sealed class Assembly
             _folder = string.Empty;
             swComponent = null;
             Console.WriteLine("Assembly closed after creating.");
-            return;
+            return Path.GetFileName(fullPath);
         }
 
         _model = model;
         _assembly = model as AssemblyDoc;
-        _folder = outFolder;
+        _folder = Path.GetDirectoryName(fullPath) ?? string.Empty;
 
         int activateErrors = 0;
         _swApp.ActivateDoc3(_model.GetTitle(), false, (int)swRebuildOnActivation_e.swDontRebuildActiveDoc, ref activateErrors);
         Console.WriteLine("Assembly remains open for further operations.");
+        return Path.GetFileName(fullPath);
     }
 
     public Component2 InsertComponentToOpenAssembly(string componentPath)
@@ -97,6 +103,9 @@ public sealed class Assembly
         _insertIndex * 0.2,
         0.0,
         0.0);
+
+    if (swComponent == null)
+        throw new Exception("Failed to insert component into assembly: " + path);
 
     _insertIndex++;
     _model.ClearSelection2(true);

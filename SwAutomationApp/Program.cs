@@ -18,15 +18,17 @@ public static class Program
 
     var pdm = new global::SwAutomation.Pdm.PdmModule();
     var myPart = new Part(swApp, pdm);
+    var assembly = new Assembly(swApp, pdm);
 
     pdm.Login(); 
     string outFolder = @"60_Tests\665_Test_Kareem";
 
-    myPart.Create_stator_sheet(outFolder);
-    myPart.CreateSkeleton(sideOffset: 500.0, groundOffset: -250.0, outFolder: outFolder,closeAfterCreate: true);
+    Project1.Run(outFolder, myPart, assembly);
 
 
-    string myLocalPart = @"C:\Users\kareem.salah\Downloads\birr machines\birr machines\parts\StatorComplete.SLDASM";
+    //myPart.Create_stator_sheet(outFolder);
+    //myPart.CreateSkeleton(sideOffset: 500.0, groundOffset: -250.0, outFolder: outFolder,closeAfterCreate: true);
+    //string myLocalPart = @"C:\Users\kareem.salah\Downloads\birr machines\birr machines\parts\StatorComplete.SLDASM";
     //pdm.AddExistingFileToPdm(myLocalPart, @"60_Tests\665_Test_Kareem");
 }
 }
