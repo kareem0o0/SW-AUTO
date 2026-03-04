@@ -3,6 +3,7 @@ using System.IO;
 using EPDM.Interop.epdm;
 using SolidWorks.Interop.sldworks; // Added this
 using SolidWorks.Interop.swconst;  // Added this
+using System.Collections.Generic;
 
 namespace SwAutomation.Pdm
 {
@@ -84,7 +85,9 @@ namespace SwAutomation.Pdm
 }
 public void GetDataCardValues(string filePath)
 {
-    string fullPath = Path.Combine(VaultRoot, filePath);
+    string fullPath = Path.IsPathRooted(filePath)
+        ? filePath
+        : Path.Combine(VaultRoot, filePath);
     IEdmFile5 file = _vault.GetFileFromPath(fullPath, out IEdmFolder5 parentFolder);
 
     if (file == null) { Console.WriteLine("File not found."); return; }
@@ -117,32 +120,87 @@ public void GetDataCardValues(string filePath)
 }
 public void UpdateBirrDataCard(string relativePath, Dictionary<string, string> values)
 {
-    string fullPath = Path.Combine(VaultRoot, relativePath);
+    string fullPath = Path.IsPathRooted(relativePath)
+        ? relativePath
+        : Path.Combine(VaultRoot, relativePath);
     IEdmFile5 file = _vault.GetFileFromPath(fullPath, out IEdmFolder5 parentFolder);
-
     if (file == null) throw new Exception($"File not found: {fullPath}");
 
-    // 1. Checkout
     if (!file.IsLocked) file.LockFile(parentFolder.ID, 0);
 
     IEdmEnumeratorVariable5 varEnum = (IEdmEnumeratorVariable5)file.GetEnumeratorVariable();
-
-    // 2. Define the tabs we want to keep in sync
+    IEdmVariableMgr5 varMgr = (IEdmVariableMgr5)_vault;
+    
     string[] configsToUpdate = { "@", "P0001" };
 
     foreach (var config in configsToUpdate)
     {
         foreach (var entry in values)
         {
-            varEnum.SetVar(entry.Key, config, entry.Value);
+            try
+            {
+                // Find the ACTUAL variable name in the vault that matches our key
+                string actualVarName = null;
+                IEdmPos5 pos = varMgr.GetFirstVariablePosition();
+                while (!pos.IsNull)
+                {
+                    IEdmVariable5 v = varMgr.GetNextVariable(pos);
+                    if (v.Name.Equals(entry.Key, StringComparison.OrdinalIgnoreCase) ||
+                        v.Name.StartsWith(entry.Key.Replace(":", ""), StringComparison.OrdinalIgnoreCase))
+                    {
+                        actualVarName = v.Name;
+                        break;
+                    }
+                }
+                
+                if (!string.IsNullOrEmpty(actualVarName))
+                {
+                    varEnum.SetVar(actualVarName, config, entry.Value, false);
+                }
+                else
+                {
+                    Console.WriteLine($"SKIPPED: Variable matching '{entry.Key}' not found in Vault.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error setting {entry.Key}: {ex.Message}");
+            }
         }
     }
 
-    // 3. Save changes and Check In
-    varEnum.CloseFile(true);
+    ((IEdmEnumeratorVariable8)varEnum).CloseFile(true);
     file.UnlockFile(0, "Automated data card sync");
+}
+public void FillBirrDataCard(string relativePath)
+{
+    // Define the full set of variables based on your manual data card scan
+    var birrData = new Dictionary<string, string>
+    {
+        // Identification
+        { "Zeichnungs-Nr.:", "" },
+        { "Title", "Stator Sheet Metal" },
+        { "Subtitle", "Automated Generation" },
+        
+        // Project & Order
+        { "Projekt", "665_Birr_Project" },
+        { "Kunde", "Birr Machines AG" },
+        { "Kundenauftrag", "66" }, // From your scan value
+        
+        // Technical & German Traceability
+        { "Type", "44" },           // From your scan value
+        { "Einheit", "kg" },
+        { "Entstand aus", "22" },   // From your scan value
+        { "Ersatz für", "11" },     // From your scan value
+        
+        // Status
+        { "DataCheck", "X" }
+    };
 
-    Console.WriteLine($"Successfully synced Data Card for: {Path.GetFileName(relativePath)}");
+    // Call our existing sync method to push these to @ and P0001
+    UpdateBirrDataCard(relativePath, birrData);
+    
+    Console.WriteLine($"Full Data Card populated for: {relativePath}");
 }
     }
 }
