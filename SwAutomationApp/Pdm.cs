@@ -82,5 +82,67 @@ namespace SwAutomation.Pdm
         Console.WriteLine($"Saved and Vaulted: {Path.GetFileName(fullPath)}");
         return fullPath;
 }
+public void GetDataCardValues(string filePath)
+{
+    string fullPath = Path.Combine(VaultRoot, filePath);
+    IEdmFile5 file = _vault.GetFileFromPath(fullPath, out IEdmFolder5 parentFolder);
+
+    if (file == null) { Console.WriteLine("File not found."); return; }
+
+    IEdmEnumeratorVariable5 varEnum = (IEdmEnumeratorVariable5)file.GetEnumeratorVariable();
+    IEdmVariableMgr5 varMgr = (IEdmVariableMgr5)_vault;
+
+    // Get a list of all configurations in this file (e.g., "@", "P0001", "Default")
+    IEdmStrLst5 cfgList = file.GetConfigurations();
+    IEdmPos5 cfgPos = cfgList.GetHeadPosition();
+
+    while (!cfgPos.IsNull)
+    {
+        string cfgName = cfgList.GetNext(cfgPos);
+        Console.WriteLine($"\n--- Configuration: [{cfgName}] ---");
+
+        IEdmPos5 varPos = varMgr.GetFirstVariablePosition();
+        while (!varPos.IsNull)
+        {
+            IEdmVariable5 variable = varMgr.GetNextVariable(varPos);
+            // We search specifically in THIS configuration now
+            varEnum.GetVar(variable.Name, cfgName, out object varValue);
+
+            if (varValue != null && !string.IsNullOrEmpty(varValue.ToString()))
+            {
+                Console.WriteLine($"{variable.Name}: {varValue}");
+            }
+        }
+    }
+}
+public void UpdateBirrDataCard(string relativePath, Dictionary<string, string> values)
+{
+    string fullPath = Path.Combine(VaultRoot, relativePath);
+    IEdmFile5 file = _vault.GetFileFromPath(fullPath, out IEdmFolder5 parentFolder);
+
+    if (file == null) throw new Exception($"File not found: {fullPath}");
+
+    // 1. Checkout
+    if (!file.IsLocked) file.LockFile(parentFolder.ID, 0);
+
+    IEdmEnumeratorVariable5 varEnum = (IEdmEnumeratorVariable5)file.GetEnumeratorVariable();
+
+    // 2. Define the tabs we want to keep in sync
+    string[] configsToUpdate = { "@", "P0001" };
+
+    foreach (var config in configsToUpdate)
+    {
+        foreach (var entry in values)
+        {
+            varEnum.SetVar(entry.Key, config, entry.Value);
+        }
+    }
+
+    // 3. Save changes and Check In
+    varEnum.CloseFile(true);
+    file.UnlockFile(0, "Automated data card sync");
+
+    Console.WriteLine($"Successfully synced Data Card for: {Path.GetFileName(relativePath)}");
+}
     }
 }

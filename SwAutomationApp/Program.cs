@@ -21,10 +21,11 @@ public static class Program
     var assembly = new Assembly(swApp, pdm);
 
     pdm.Login(); 
-    string outFolder = @"60_Tests\665_Test_Kareem";
+    //string outFolder = @"60_Tests\665_Test_Kareem";
 
-    Project1.Run(outFolder, myPart, assembly);
-
+    //Project1.Run(outFolder, myPart, assembly);
+    
+    pdm.GetDataCardValues(@"60_Tests\665_Test_Kareem\BMZS010258.sldprt");
 
     //myPart.Create_stator_sheet(outFolder);
     //myPart.CreateSkeleton(sideOffset: 500.0, groundOffset: -250.0, outFolder: outFolder,closeAfterCreate: true);
