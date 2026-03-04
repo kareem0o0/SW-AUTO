@@ -12,30 +12,21 @@ public static class Program
     [STAThread]
     
     public static void Main(string[] args)
-    {
-        string outFolder = @"C:\Users\kareem.salah\Downloads\birr machines\birr machines\parts";
-        Console.WriteLine("Connecting to SOLIDWORKS...");
-        Component2 swComponent = null;
-        SldWorks swApp = new SldWorks();
-        swApp.Visible = true;
+{
+    Console.WriteLine("Connecting to SOLIDWORKS...");
+    SldWorks swApp = new SldWorks { Visible = true };
 
-        var part = new Part(swApp);
-        var assembly = new Assembly(swApp);
+    var pdm = new global::SwAutomation.Pdm.PdmModule();
+    var myPart = new Part(swApp, pdm);
 
-        //part.Create_stator_sheet(outFolder);
-        string skeleton = part.CreateSkeleton(sideOffset: 500.0, groundOffset: -250.0, outFolder: outFolder,closeAfterCreate: true); // values in mm
-        assembly.CreateAssembly(outFolder, "RotorComplete.SLDASM", closeAfterCreate: true);
-        assembly.CreateAssembly(outFolder, "StatorComplete.SLDASM", closeAfterCreate: true);
-        assembly.CreateAssembly(outFolder, "HousingMachined.SLDASM", closeAfterCreate: true);
-        assembly.CreateAssembly(outFolder, "MachineAssembly.SLDASM", closeAfterCreate: false);
-        swComponent = assembly.InsertComponentToOpenAssembly(skeleton);
-        assembly.mate_plans(swComponent);
-        swComponent = assembly.InsertComponentToOpenAssembly("RotorComplete.SLDASM");
-        assembly.mate_plans(swComponent);
-        swComponent = assembly.InsertComponentToOpenAssembly("StatorComplete.SLDASM");
-        assembly.mate_plans(swComponent);
-        swComponent = assembly.InsertComponentToOpenAssembly("HousingMachined.SLDASM");
-        assembly.mate_plans(swComponent);
-        
-    }
+    pdm.Login(); 
+    string outFolder = @"60_Tests\665_Test_Kareem";
+
+    myPart.Create_stator_sheet(outFolder);
+    myPart.CreateSkeleton(sideOffset: 500.0, groundOffset: -250.0, outFolder: outFolder,closeAfterCreate: true);
+
+
+    string myLocalPart = @"C:\Users\kareem.salah\Downloads\birr machines\birr machines\parts\StatorComplete.SLDASM";
+    //pdm.AddExistingFileToPdm(myLocalPart, @"60_Tests\665_Test_Kareem");
+}
 }
