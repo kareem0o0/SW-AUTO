@@ -75,8 +75,8 @@ public static class Project1
 
         // Note: SOLIDWORKS API uses Meters, so 50mm = 0.05
         //assembly.ApplyCoincedentMate(inserted_skeleton, "Ebene rechts", inserted_statorsheet, "Ebene rechts");
-        assembly.ApplyParallelMate(inserted_skeleton, "Ebene vorne", inserted_statorsheet, "Ebene vorne");
-        //assembly.ApplyCoincedentMate(inserted_skeleton, "Ebene oben", inserted_statorsheet, "StatorTop",0.05);
+        //assembly.ApplyParallelMate(inserted_skeleton, "Ebene vorne", inserted_statorsheet, "Ebene vorne");
+        assembly.ApplyCoincedentMate(inserted_skeleton, "Ebene oben", inserted_statorsheet, "StatorTop",0.05);
 
         System.Console.WriteLine($"Macro completed. Machine assembly: {machine}");
     }
