@@ -97,6 +97,12 @@ public sealed class Part
             swModel.ClearSelection2(true);
             selected = swModel.Extension.SelectByID2("", "FACE", (outerRadius + innerRadius) / 2.0, 0, plateThickness, false, 0, null, 0);
             if (!selected) throw new Exception("Could not select top face");
+            Face2 topFace = selMgr.GetSelectedObject6(1, -1) as Face2;
+            PartDoc swPart = swModel as PartDoc;
+            if (topFace != null && swPart != null)
+                swPart.ISetEntityName((Entity)topFace, "StatorTop");
+            // Keep workflow unchanged: ensure top face is selected for the next sketch.
+            selected = swModel.Extension.SelectByID2("", "FACE", (outerRadius + innerRadius) / 2.0, 0, plateThickness, false, 0, null, 0);
 
             swSketchManager.InsertSketch(true);
             swSketchManager.CreateCenterRectangle(0, centerY, 0, halfWidth, topY, 0);

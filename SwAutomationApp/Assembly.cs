@@ -218,11 +218,22 @@ public void ApplyCoincedentMate(Component2 comp1, string ref1, Component2 comp2,
     ModelDocExtension swExt = _model.Extension;
     _model.ClearSelection2(true);
 
-    // 3. Select the first reference
-    bool s1 = swExt.SelectByID2(selection1, "PLANE", 0, 0, 0, false, 0, null, 0);
+    bool SelectReference(Component2 comp, string referenceName, string selectionToken, bool append)
+    {
+        if (comp != null && referenceName.Equals("StatorTop", StringComparison.OrdinalIgnoreCase))
+        {
+            PartDoc partDoc = comp.GetModelDoc2() as PartDoc;
+            Entity faceInPart = partDoc?.GetEntityByName("StatorTop", (int)swSelectType_e.swSelFACES) as Entity;
+            Entity faceInAssembly = (faceInPart != null) ? comp.GetCorrespondingEntity(faceInPart) as Entity : null;
+            if (faceInAssembly != null)
+                return faceInAssembly.Select4(append, null);
+        }
 
-    // 4. Select the second reference (mark as 'true' to append to selection)
-    bool s2 = swExt.SelectByID2(selection2, "PLANE", 0, 0, 0, true, 0, null, 0);
+        return swExt.SelectByID2(selectionToken, "PLANE", 0, 0, 0, append, 0, null, 0);
+    }
+
+    bool s1 = SelectReference(comp1, ref1, selection1, false);
+    bool s2 = SelectReference(comp2, ref2, selection2, true);
 
     if (s1 && s2)
     {
