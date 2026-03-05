@@ -20,14 +20,14 @@ public static class Program
     var myPart = new Part(swApp, pdm);
     var assembly = new Assembly(swApp, pdm);
 
-    pdm.Login(); 
+    //pdm.Login(); 
     string outFolder = @"60_Tests\665_Test_Kareem";
-
-    //Project1.Run(outFolder, myPart, assembly);
+    string localoutFolder = @"C:\Users\kareem.salah\Downloads\birr machines\birr machines\parts";
+    Project1.Run2(localoutFolder, myPart, assembly);
     //myPart.Create_stator_sheet(outFolder);
     //pdm.GetDataCardValues(@"60_Tests\665_Test_Kareem\BMZS010258.sldprt");
-    string statorFileName = myPart.Create_stator_sheet(outFolder,true);
-    pdm.FillBirrDataCard(System.IO.Path.Combine(outFolder, statorFileName));
+    //string statorFileName = myPart.Create_stator_sheet(outFolder,true);
+    //pdm.FillBirrDataCard(System.IO.Path.Combine(outFolder, statorFileName));
 
     //myPart.CreateSkeleton(sideOffset: 500.0, groundOffset: -250.0, outFolder: outFolder,closeAfterCreate: true);
     //string myLocalPart = @"C:\Users\kareem.salah\Downloads\birr machines\birr machines\parts\StatorComplete.SLDASM";

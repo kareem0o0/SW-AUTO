@@ -21,12 +21,21 @@ public sealed class Assembly
         _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
     }
 
-    public string CreateAssembly(string outFolder, string fileName = "Assembly.SLDASM", bool closeAfterCreate = false)
+    public string CreateAssembly(string outFolder, string fileName = "Assembly.SLDASM", bool closeAfterCreate = false, bool SaveToPdm = false)
     {
         Directory.CreateDirectory(outFolder);
         string template = _swApp.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplateAssembly);
         ModelDoc2 model = (ModelDoc2)_swApp.NewDocument(template, 0, 0, 0);
-        string fullPath = _pdm.SaveAsPdm(model, outFolder);
+        string fullPath;
+        if (SaveToPdm)
+        {
+            fullPath = _pdm.SaveAsPdm(model, outFolder);
+        }
+        else
+        {
+            fullPath = Path.Combine(outFolder, fileName);
+            model.SaveAs3(fullPath, 0, 1);
+        }
 
         Console.WriteLine($"Assembly saved to: {fullPath}");
         _insertIndex = 0;
@@ -190,6 +199,109 @@ public void mate_plans(Component2 insertedComponent)
     }
 
     _model.EditRebuild3();
+}
+public void ApplyCoincedentMate(Component2 comp1, string ref1, Component2 comp2, string ref2, double offset = 0)
+{
+    if (_model == null || _assembly == null)
+        throw new InvalidOperationException("No open assembly.");
+
+    // 1. Get the top-level assembly name (needed for the selection string)
+    // Remove the extension to get the clean title
+    string asmName = _model.GetTitle().Split('.')[0];
+
+    // 2. Build Selection Strings
+    // Format: "PlaneName@InstanceName@AssemblyName"
+    // If a component is null, we assume the reference belongs to the top-level assembly itself
+    string selection1 = (comp1 != null) ? $"{ref1}@{comp1.Name2}@{asmName}" : ref1;
+    string selection2 = (comp2 != null) ? $"{ref2}@{comp2.Name2}@{asmName}" : ref2;
+
+    ModelDocExtension swExt = _model.Extension;
+    _model.ClearSelection2(true);
+
+    // 3. Select the first reference
+    bool s1 = swExt.SelectByID2(selection1, "PLANE", 0, 0, 0, false, 0, null, 0);
+
+    // 4. Select the second reference (mark as 'true' to append to selection)
+    bool s2 = swExt.SelectByID2(selection2, "PLANE", 0, 0, 0, true, 0, null, 0);
+
+    if (s1 && s2)
+    {
+        int mateError = 0;
+        
+        // Decide Mate Type: If offset is 0, use Coincident. Otherwise, use Distance.
+        swMateType_e mateType = (offset == 0) 
+            ? swMateType_e.swMateCOINCIDENT 
+            : swMateType_e.swMateDISTANCE;
+
+        // AddMate5 Parameters:
+        // Type, Alignment, Flip, Distance, Max, Min, etc.
+        _assembly.AddMate5(
+            (int)mateType,
+            (int)swMateAlign_e.swMateAlignALIGNED,
+            false,  // Flip Alignment
+            offset, // Distance/Offset
+            offset, // Max Distance
+            offset, // Min Distance
+            0, 0, 0, 0, 0,
+            false,  // Is SmartMate
+            false,  // Use for positioning only
+            0,      // Lock rotation
+            out mateError);
+
+        if (mateError > 1)
+            Console.WriteLine($"Mate failed with error code: {mateError}");
+    }
+    else
+    {
+        Console.WriteLine($"Selection failed for {selection1} or {selection2}");
+    }
+
+    _model.EditRebuild3();
+}
+public void ApplyParallelMate(Component2 comp1, string ref1, Component2 comp2, string ref2)
+{
+    if (_model == null || _assembly == null)
+        throw new InvalidOperationException("No open assembly.");
+
+    // 1. Get the top-level assembly name for the selection string
+    string asmName = _model.GetTitle().Split('.')[0];
+
+    // 2. Build Selection Strings: "Feature@Component@Assembly"
+    string selection1 = (comp1 != null) ? $"{ref1}@{comp1.Name2}@{asmName}" : ref1;
+    string selection2 = (comp2 != null) ? $"{ref2}@{comp2.Name2}@{asmName}" : ref2;
+
+    ModelDocExtension swExt = _model.Extension;
+    _model.ClearSelection2(true);
+
+    // 3. Select the references (using "PLANE" as the default type)
+    bool s1 = swExt.SelectByID2(selection1, "PLANE", 0, 0, 0, false, 0, null, 0);
+    bool s2 = swExt.SelectByID2(selection2, "PLANE", 0, 0, 0, true, 0, null, 0);
+
+    if (s1 && s2)
+    {
+        int mateError = 0;
+
+        // AddMate5 for Parallel:
+        // (int)swMateType_e.swMatePARALLEL = 1
+        _assembly.AddMate5(
+            (int)swMateType_e.swMatePARALLEL,
+            (int)swMateAlign_e.swMateAlignALIGNED,
+            false, // Flip alignment
+            0, 0, 0, 0, 0, 0, 0, 0, // No offsets/limits for parallel
+            false, // Is SmartMate
+            false, // Position only
+            0,     // Lock rotation
+            out mateError);
+
+        if (mateError > 1)
+            Console.WriteLine($"Parallel mate failed for {selection1}/{selection2}. Error: {mateError}");
+    }
+    else
+    {
+        Console.WriteLine($"Selection failed for Parallel mate: {selection1} or {selection2}");
+    }
+
+    _model.EditRebuild3(); // Rebuild to apply changes
 }
 
 }
