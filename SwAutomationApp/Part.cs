@@ -278,6 +278,128 @@ public sealed class Part
         }
     }
 
+    public string Create_shaft(string outFolder, bool closeAfterCreate = false, bool SaveToPdm = false)
+    {
+        double Mm(double mm) => mm * MmToMeters;
+
+        // Section radii (mm) - editable.
+        double radius1Mm = 60.0;
+        double radius2Mm = 50.0;
+        double radius3Mm = 40.0;
+        double radius4Mm = 45.0;
+        double radius5Mm = 35.0;
+
+        // Section lengths (mm) - editable.
+        double length1Mm = 180.0;
+        double length2Mm = 140.0;
+        double length3Mm = 220.0;
+        double length4Mm = 110.0;
+        double length5Mm = 150.0;
+
+        double[] radii = { Mm(radius1Mm), Mm(radius2Mm), Mm(radius3Mm), Mm(radius4Mm), Mm(radius5Mm) };
+        double[] lengths = { Mm(length1Mm), Mm(length2Mm), Mm(length3Mm), Mm(length4Mm), Mm(length5Mm) };
+
+        if (string.IsNullOrWhiteSpace(outFolder))
+            throw new ArgumentException("Output folder is required.", nameof(outFolder));
+
+        Directory.CreateDirectory(outFolder);
+
+        string template = _swApp.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplatePart);
+        ModelDoc2 swModel = (ModelDoc2)_swApp.NewDocument(template, 0, 0, 0);
+        if (swModel == null)
+            throw new Exception("Failed to create new part document.");
+
+        Dimension swDim = null;
+        DisplayDimension displayDim = null;
+
+        bool SelectSketchByIndex(int index)
+        {
+            return swModel.Extension.SelectByID2($"Skizze{index}", "SKETCH", 0, 0, 0, false, 0, null, 0)
+                || swModel.Extension.SelectByID2($"Sketch{index}", "SKETCH", 0, 0, 0, false, 0, null, 0);
+        }
+
+        SketchManager swSketchManager = swModel.SketchManager;
+        double zCursor = 0.0;
+
+        for (int i = 0; i < 5; i++)
+        {
+            swModel.ClearSelection2(true);
+
+            bool sketchPlaneSelected;
+            if (i == 0)
+            {
+                sketchPlaneSelected = swModel.Extension.SelectByID2("Ebene vorne", "PLANE", 0, 0, 0, false, 0, null, 0);
+            }
+            else
+            {
+                sketchPlaneSelected = swModel.Extension.SelectByID2("", "FACE", 0, 0, zCursor, false, 0, null, 0);
+            }
+
+            if (!sketchPlaneSelected)
+                throw new Exception($"Could not select sketch plane/face for shaft section {i + 1}.");
+
+            swSketchManager.InsertSketch(true);
+            swSketchManager.CreateCircleByRadius(0, 0, 0, radii[i]);
+
+            swModel.ClearSelection2(true);
+            bool circleSelected = swModel.Extension.SelectByID2("", "SKETCHSEGMENT", radii[i], 0, zCursor, false, 0, null, 0);
+            if (!circleSelected)
+                throw new Exception($"Could not select circle for section {i + 1}.");
+
+            displayDim = (DisplayDimension)swModel.AddDimension2(radii[i] + Mm(20), Mm(20), zCursor);
+            if (displayDim == null)
+                throw new Exception($"Could not create radius dimension for section {i + 1}.");
+
+            swDim = displayDim.GetDimension();
+            if (swDim == null)
+                throw new Exception($"Could not access dimension handle for section {i + 1}.");
+
+            // Circle driving sketch dimension is diameter, so use 2 * radius.
+            swDim.SystemValue = radii[i] * 2.0;
+
+            swSketchManager.InsertSketch(true);
+
+            swModel.ClearSelection2(true);
+            bool sketchSelected = SelectSketchByIndex(i + 1);
+            if (!sketchSelected)
+                throw new Exception($"Could not select sketch for section {i + 1}.");
+
+            bool featureCreated = swModel.FeatureManager.FeatureExtrusion2(
+                true, false, false,
+                (int)swEndConditions_e.swEndCondBlind, 0,
+                lengths[i], 0,
+                false, false, false, false,
+                0, 0, false, false, false, false,
+                true, true, true, 0, 0, false) != null;
+
+            if (!featureCreated)
+                throw new Exception($"Failed to create shaft section {i + 1}.");
+
+            zCursor += lengths[i];
+        }
+
+        string savedPath;
+        if (SaveToPdm)
+        {
+            savedPath = _pdm.SaveAsPdm(swModel, outFolder);
+            Console.WriteLine($"Shaft saved to PDM: {savedPath}");
+        }
+        else
+        {
+            savedPath = Path.Combine(outFolder, "shaft.SLDPRT");
+            swModel.SaveAs3(savedPath, 0, 1);
+            Console.WriteLine($"Shaft saved locally: {savedPath}");
+        }
+
+        if (closeAfterCreate)
+        {
+            _swApp.CloseDoc(swModel.GetTitle());
+            Console.WriteLine("Part closed after creating.");
+        }
+
+        return Path.GetFileName(savedPath);
+    }
+
     public string CreateSkeleton(double sideOffset, double groundOffset, string outFolder, bool closeAfterCreate = false, bool SaveToPdm = false)
     {
         Directory.CreateDirectory(outFolder);

@@ -50,35 +50,19 @@ public static class Project1
             outFolder: outFolder,
             closeAfterCreate: true,
             SaveToPdm: false);
-
-        // 2) Create assemblies (capture real vaulted file names)
-/*        string rotor = assembly.CreateAssembly(outFolder, "RotorComplete.SLDASM", closeAfterCreate: true, SaveToPdm: false);
-        string stator = assembly.CreateAssembly(outFolder, "StatorComplete.SLDASM", closeAfterCreate: true, SaveToPdm: false);
-        string housing = assembly.CreateAssembly(outFolder, "HousingMachined.SLDASM", closeAfterCreate: true, SaveToPdm: false);
-*/      string statorsheet = part.Create_stator_sheet(outFolder, true, SaveToPdm: false);
+            
+        string statorsheet = part.Create_stator_sheet(outFolder, true, SaveToPdm: false);
+        string shaft = part.Create_shaft(outFolder, true, SaveToPdm: false);
         string machine = assembly.CreateAssembly(outFolder, "MachineAssembly.SLDASM", closeAfterCreate: false, SaveToPdm: false);
 
-        // 3) Insert and mate components into the open machine assembly
         Component2 inserted_skeleton = assembly.InsertComponentToOpenAssembly(skeleton);
         assembly.mate_plans(inserted_skeleton);
-/*
-        Component2 inserted_rotor = assembly.InsertComponentToOpenAssembly(rotor);
-        assembly.mate_plans(inserted_rotor);
-
-        Component2 inserted_stator = assembly.InsertComponentToOpenAssembly(stator);
-        assembly.mate_plans(inserted_stator);
-
-        Component2 inserted_housing = assembly.InsertComponentToOpenAssembly(housing);
-        assembly.mate_plans(inserted_housing);
-*/
         Component2 inserted_statorsheet = assembly.InsertComponentToOpenAssembly(statorsheet);
-
-        // Note: SOLIDWORKS API uses Meters, so 50mm = 0.05
-        //assembly.ApplyCoincedentMate(inserted_skeleton, "Ebene rechts", inserted_statorsheet, "Ebene rechts");
+        Component2 inserted_shaft = assembly.InsertComponentToOpenAssembly(shaft);
         assembly.ApplyCoincedentMate(inserted_skeleton, "X-Achse", inserted_statorsheet, "Z-Achse");
-        //assembly.ApplyParallelMate(inserted_skeleton, "Ebene vorne", inserted_statorsheet, "Ebene vorne");
         assembly.ApplyCoincedentMate(inserted_skeleton, "Ebene rechts", inserted_statorsheet, "Ebene vorne");
         assembly.ApplyCoincedentMate(inserted_skeleton, "Ebene vorne", inserted_statorsheet, "Ebene rechts");
+        assembly.ApplyCoincedentMate(inserted_skeleton, "X-Achse", inserted_shaft, "Z-Achse");
         System.Console.WriteLine($"Macro completed. Machine assembly: {machine}");
     }
 }
