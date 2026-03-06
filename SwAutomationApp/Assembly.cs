@@ -139,12 +139,20 @@ private static bool IsPlaneReference(string referenceName)
         || referenceName.Equals("Rechts", StringComparison.OrdinalIgnoreCase);
 }
 
+private static bool IsAxisReference(string referenceName)
+{
+    if (string.IsNullOrWhiteSpace(referenceName)) return false;
+    return referenceName.IndexOf("axis", StringComparison.OrdinalIgnoreCase) >= 0
+        || referenceName.IndexOf("achse", StringComparison.OrdinalIgnoreCase) >= 0;
+}
+
 private bool SelectReferenceGeneric(ModelDocExtension swExt, Component2 comp, string referenceName, string selectionToken, bool append)
 {
     bool looksLikePlane = IsPlaneReference(referenceName);
+    bool looksLikeAxis = IsAxisReference(referenceName);
 
     // Generic named-face resolution for all mate methods.
-    if (comp != null && !looksLikePlane)
+    if (comp != null && !looksLikePlane && !looksLikeAxis)
     {
         PartDoc partDoc = comp.GetModelDoc2() as PartDoc;
         Entity faceInPart = partDoc?.GetEntityByName(referenceName, (int)swSelectType_e.swSelFACES) as Entity;
@@ -153,7 +161,7 @@ private bool SelectReferenceGeneric(ModelDocExtension swExt, Component2 comp, st
             return faceInAssembly.Select4(append, null);
     }
 
-    string selType = looksLikePlane ? "PLANE" : "FACE";
+    string selType = looksLikePlane ? "PLANE" : (looksLikeAxis ? "AXIS" : "FACE");
     return swExt.SelectByID2(selectionToken, selType, 0, 0, 0, append, 0, null, 0);
 }
 
@@ -326,6 +334,18 @@ public void ApplyParallelMate(Component2 comp1, string ref1, Component2 comp2, s
     }
 
     _model.EditRebuild3(); // Rebuild to apply changes
+}
+
+public void ApplyCoincedentAxisMate(Component2 comp1, Component2 comp2)
+{
+    if (_model == null || _assembly == null)
+        throw new InvalidOperationException("No open assembly.");
+
+    string[] axes = { "X-Achse", "Y-Achse", "Z-Achse" };
+    foreach (string axis in axes)
+    {
+        ApplyCoincedentMate(comp1, axis, comp2, axis);
+    }
 }
 
 }

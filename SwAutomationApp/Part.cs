@@ -99,7 +99,7 @@ public sealed class Part
             if (!selected) throw new Exception("Could not select top face");
             Face2 topFace = selMgr.GetSelectedObject6(1, -1) as Face2;
             PartDoc swPart = swModel as PartDoc;
-            swPart.ISetEntityName((Entity)topFace, "StatorTop");
+            swPart.ISetEntityName((Entity)topFace, "TopFace");
             // Keep workflow unchanged: ensure top face is selected for the next sketch.
             selected = swModel.Extension.SelectByID2("", "FACE", (outerRadius + innerRadius) / 2.0, 0, plateThickness, false, 0, null, 0);
 
