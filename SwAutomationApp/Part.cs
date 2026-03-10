@@ -1713,4 +1713,268 @@ public sealed class Part
             return null;
         }
     }
+
+    public string Create_torsion_bar(string outFolder, bool closeAfterCreate = false, bool SaveToPdm = false)
+    {
+        double Mm(double mm) => mm * MmToMeters;
+        using var automationUi = BeginAutomationUiSuppression();
+        bool SelectSketchByIndex(ModelDoc2 model, int index)
+        {
+            return model.Extension.SelectByID2($"Skizze{index}", "SKETCH", 0, 0, 0, false, 0, null, 0)
+                || model.Extension.SelectByID2($"Sketch{index}", "SKETCH", 0, 0, 0, false, 0, null, 0);
+        }
+
+        // Main dimensions (mm) - change these only.
+        double barLengthMm = 1074.0;
+        double barHeightMm = 40.0;
+        double barThicknessMm = 30.0;
+        double holeCenterlineOffsetFromBottomMm = 20.0;
+        double outerHoleEndOffsetMm = 30.0;
+        double holePairSpacingMm = 315.0;
+        double outerHoleDiameterMm = 10.0;
+        double innerHoleDiameterMm = 16.0;
+        double centerHoleDiameterMm = 16.0;
+        string outerTapSizePrimary = "M10x1.5";
+        string outerTapSizeFallback = "M10";
+        string innerTapSizePrimary = "M16x2";
+        string innerTapSizeFallback = "M16";
+
+        string p0001ConfigName = "P0001";
+        string p0002ConfigName = "P0002";
+
+        // Derived dimensions (m)
+        double barLength = Mm(barLengthMm);
+        double barHeight = Mm(barHeightMm);
+        double barThickness = Mm(barThicknessMm);
+        double halfLength = barLength / 2.0;
+        double halfHeight = barHeight / 2.0;
+        double halfThickness = barThickness / 2.0;
+        double holeCenterlineY = -halfHeight + Mm(holeCenterlineOffsetFromBottomMm);
+        double outerHoleCenterX = halfLength - Mm(outerHoleEndOffsetMm);
+        double innerHoleCenterX = outerHoleCenterX - Mm(holePairSpacingMm);
+        double centerHoleRadius = Mm(centerHoleDiameterMm / 2.0);
+
+        ModelDoc2 swModel = null;
+        SketchManager swSketchManager = null;
+
+        try
+        {
+            Dimension swDim = null;
+            DisplayDimension displayDim = null;
+
+            if (!Directory.Exists(outFolder))
+                Directory.CreateDirectory(outFolder);
+
+            string template = _swApp.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplatePart);
+            swModel = (ModelDoc2)_swApp.NewDocument(template, 0, 0, 0);
+
+            if (swModel == null)
+                throw new Exception("Failed to create new part");
+
+            swSketchManager = swModel.SketchManager;
+
+            PartDoc torsionBarPart = swModel as PartDoc;
+            torsionBarPart.SetMaterialPropertyName2("", "", Name: "AISI 1020");
+
+            ConfigurationManager configMgr = swModel.ConfigurationManager;
+            if (configMgr == null)
+                throw new Exception("Could not access configuration manager");
+
+            Configuration p0001Config = configMgr.ActiveConfiguration;
+            if (p0001Config == null)
+                throw new Exception("Could not access the active torsion-bar configuration");
+            p0001Config.Name = p0001ConfigName;
+
+            bool selected = swModel.Extension.SelectByID2("Ebene vorne", "PLANE", 0, 0, 0, false, 0, null, 0);
+            if (!selected) throw new Exception("Could not select Front Plane for torsion bar");
+
+            swSketchManager.InsertSketch(true);
+            swSketchManager.CreateCenterRectangle(0, 0, 0, halfLength, halfHeight, 0);
+
+            swModel.ClearSelection2(true);
+            selected = swModel.Extension.SelectByID2("", "SKETCHSEGMENT", 0, halfHeight, 0, false, 0, null, 0);
+            if (!selected) throw new Exception("Could not select torsion-bar top edge");
+            displayDim = (DisplayDimension)swModel.AddHorizontalDimension2(0, halfHeight + Mm(20), 0);
+            if (displayDim == null) throw new Exception("Could not create torsion-bar length dimension");
+            swDim = displayDim.GetDimension();
+            if (swDim == null) throw new Exception("Could not access torsion-bar length dimension");
+            swDim.SystemValue = barLength;
+
+            swModel.ClearSelection2(true);
+            selected = swModel.Extension.SelectByID2("", "SKETCHSEGMENT", halfLength, 0, 0, false, 0, null, 0);
+            if (!selected) throw new Exception("Could not select torsion-bar right edge");
+            displayDim = (DisplayDimension)swModel.AddVerticalDimension2(halfLength + Mm(20), 0, 0);
+            if (displayDim == null) throw new Exception("Could not create torsion-bar height dimension");
+            swDim = displayDim.GetDimension();
+            if (swDim == null) throw new Exception("Could not access torsion-bar height dimension");
+            swDim.SystemValue = barHeight;
+
+            swModel.ClearSelection2(true);
+            if (!SelectSketchByIndex(swModel, 1))
+                throw new Exception("Could not select torsion-bar base sketch");
+            Feature baseExtrude = (Feature)swModel.FeatureManager.FeatureExtrusion2(
+                true, false, true,
+                (int)swEndConditions_e.swEndCondMidPlane, 0,
+                barThickness, 0,
+                false, false, false, false,
+                0, 0, false, false, false, false,
+                true, true, true, 0, 0, false);
+            if (baseExtrude == null)
+                throw new Exception("Failed to create torsion-bar base extrusion");
+
+            Feature CreateTappedHoleFeature(string[] sizeCandidates, double nominalDiameter, double centerX, string holeLabel)
+            {
+                foreach (string sizeCandidate in sizeCandidates)
+                {
+                    swModel.ClearSelection2(true);
+                    bool faceSelected = swModel.Extension.SelectByID2("", "FACE", centerX, holeCenterlineY, halfThickness, false, 0, null, 0);
+                    if (!faceSelected)
+                        throw new Exception($"Could not select torsion-bar front face for {holeLabel}");
+
+                    Feature tappedHoleFeature = swModel.FeatureManager.HoleWizard5(
+                        (int)swWzdGeneralHoleTypes_e.swWzdTap,
+                        (int)swWzdHoleStandards_e.swStandardISO,
+                        (int)swWzdHoleStandardFastenerTypes_e.swStandardISOTappedHole,
+                        sizeCandidate,
+                        (short)swEndConditions_e.swEndCondThroughAll,
+                        nominalDiameter,
+                        barThickness,
+                        0,
+                        -1, -1, -1, -1, -1, -1, -1, -1,
+                        (double)(int)swWzdHoleCosmeticThreadTypes_e.swCosmeticThreadWithoutCallout,
+                        (double)(int)swWzdHoleThreadEndCondition_e.swEndThreadTypeTHROUGH_ALL,
+                        (double)(int)swWzdHoleHcoilTapTypes_e.swTapTypePlug,
+                        0,
+                        "",
+                        false, false, true, false, true, false);
+                    if (tappedHoleFeature != null)
+                        return tappedHoleFeature;
+                }
+
+                throw new Exception($"Failed to create {holeLabel} hole-wizard feature");
+            }
+
+            swModel.ClearSelection2(true);
+            selected = swModel.Extension.SelectByID2("", "FACE", 0, 0, halfThickness, false, 0, null, 0);
+            if (!selected) throw new Exception("Could not select torsion-bar front face for center-hole sketch");
+
+            swSketchManager.InsertSketch(true);
+            object centerHole = swSketchManager.CreateCircleByRadius(0, holeCenterlineY, 0, centerHoleRadius);
+            if (centerHole == null)
+                throw new Exception("Could not create torsion-bar center-hole sketch");
+
+            swSketchManager.InsertSketch(true);
+            if (!SelectSketchByIndex(swModel, 2))
+                throw new Exception("Could not select torsion-bar center-hole sketch");
+            Feature centerHoleCutFeature = swModel.FeatureManager.FeatureCut4(
+                false, false, false,
+                (int)swEndConditions_e.swEndCondThroughAll, (int)swEndConditions_e.swEndCondThroughAll,
+                0, 0,
+                false, false, false, false,
+                0, 0, false, false, false, false,
+                false, true, true, true, true, false,
+                0, 0, false, false);
+            if (centerHoleCutFeature == null)
+                throw new Exception("Failed to create torsion-bar center-hole cut");
+
+            Feature leftOuterTappedHoleFeature = CreateTappedHoleFeature(
+                new[] { outerTapSizePrimary, outerTapSizeFallback },
+                Mm(outerHoleDiameterMm),
+                -outerHoleCenterX,
+                "left outer M10");
+            Feature rightOuterTappedHoleFeature = CreateTappedHoleFeature(
+                new[] { outerTapSizePrimary, outerTapSizeFallback },
+                Mm(outerHoleDiameterMm),
+                outerHoleCenterX,
+                "right outer M10");
+            Feature leftInnerTappedHoleFeature = CreateTappedHoleFeature(
+                new[] { innerTapSizePrimary, innerTapSizeFallback },
+                Mm(innerHoleDiameterMm),
+                -innerHoleCenterX,
+                "left inner M16");
+            Feature rightInnerTappedHoleFeature = CreateTappedHoleFeature(
+                new[] { innerTapSizePrimary, innerTapSizeFallback },
+                Mm(innerHoleDiameterMm),
+                innerHoleCenterX,
+                "right inner M16");
+
+            Configuration p0002Config = configMgr.AddConfiguration2(
+                p0002ConfigName,
+                "",
+                "",
+                0,
+                "",
+                "",
+                true);
+            if (p0002Config == null)
+                throw new Exception("Could not create torsion-bar P0002 configuration");
+
+            object p0001Configs = new string[] { p0001ConfigName };
+            Feature[] p0002OnlyFeatures =
+            {
+                centerHoleCutFeature,
+                leftOuterTappedHoleFeature,
+                rightOuterTappedHoleFeature,
+                leftInnerTappedHoleFeature,
+                rightInnerTappedHoleFeature
+            };
+
+            foreach (Feature p0002OnlyFeature in p0002OnlyFeatures)
+            {
+                if (p0002OnlyFeature == null)
+                    throw new Exception("Could not access a torsion-bar feature for configuration suppression");
+
+                if (!p0002OnlyFeature.SetSuppression2(
+                (int)swFeatureSuppressionAction_e.swSuppressFeature,
+                (int)swInConfigurationOpts_e.swSpecifyConfiguration,
+                p0001Configs))
+                {
+                    throw new Exception("Could not suppress a torsion-bar feature in P0001");
+                }
+            }
+
+            object p0002Configs = new string[] { p0002ConfigName };
+            foreach (Feature p0002OnlyFeature in p0002OnlyFeatures)
+            {
+                if (!p0002OnlyFeature.SetSuppression2(
+                (int)swFeatureSuppressionAction_e.swUnSuppressFeature,
+                (int)swInConfigurationOpts_e.swSpecifyConfiguration,
+                p0002Configs))
+                {
+                    throw new Exception("Could not unsuppress a torsion-bar feature in P0002");
+                }
+            }
+
+            swModel.EditRebuild3();
+            swModel.ShowNamedView2("*Front", (int)swStandardViews_e.swFrontView);
+            swModel.ViewZoomtofit2();
+
+            string savedPath;
+            if (SaveToPdm)
+            {
+                savedPath = _pdm.SaveAsPdm(swModel, outFolder);
+                Console.WriteLine($"Part saved to PDM: {savedPath}");
+            }
+            else
+            {
+                savedPath = Path.Combine(outFolder, "TorsionBar.SLDPRT");
+                swModel.SaveAs3(savedPath, 0, 1);
+                Console.WriteLine($"Part saved locally: {savedPath}");
+            }
+
+            if (closeAfterCreate)
+            {
+                _swApp.CloseDoc(swModel.GetTitle());
+                Console.WriteLine("Part closed after creating.");
+            }
+
+            Console.WriteLine("Done!");
+            return Path.GetFileName(savedPath);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Fatal error: " + ex);
+            return null;
+        }
+    }
 }
