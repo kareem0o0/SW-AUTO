@@ -893,6 +893,60 @@ public sealed class Part
             if (bossFeature == null)
                 throw new Exception("Failed to create separate boss body");
 
+            object[] bossFeatureFaces = bossFeature.GetFaces() as object[];
+            Face2 bossFrontFace = null;
+            double bossFaceTolerance = Mm(0.01);
+            double expectedBossFrontFaceArea = bossRectangleWidth * bossExtrusionDepth;
+            double expectedBossFrontFaceCenterX = bossTopCenterX;
+            double expectedBossFrontFaceCenterY = bossTopCenterY;
+            double bossFrontFaceAreaTolerance = expectedBossFrontFaceArea * 0.1;
+            double bestBossFrontFaceCenterDelta = double.MaxValue;
+            if (bossFeatureFaces != null)
+            {
+                foreach (object faceObj in bossFeatureFaces)
+                {
+                    Face2 candidateFace = faceObj as Face2;
+                    if (candidateFace == null)
+                        continue;
+
+                    Surface candidateSurface = candidateFace.GetSurface();
+                    if (candidateSurface == null || !candidateSurface.IsPlane())
+                        continue;
+
+                    double[] candidateBox = candidateFace.GetBox() as double[];
+                    if (candidateBox == null || candidateBox.Length < 6)
+                        continue;
+
+                    if (Math.Abs(candidateBox[2] - plateThickness) < bossFaceTolerance
+                        && Math.Abs(candidateBox[5] - (plateThickness + bossExtrusionDepth)) < bossFaceTolerance)
+                    {
+                        double candidateAreaDelta = Math.Abs(candidateFace.GetArea() - expectedBossFrontFaceArea);
+                        if (candidateAreaDelta > bossFrontFaceAreaTolerance)
+                            continue;
+
+                        double candidateCenterX = (candidateBox[0] + candidateBox[3]) / 2.0;
+                        double candidateCenterY = (candidateBox[1] + candidateBox[4]) / 2.0;
+                        double candidateCenterDelta = Math.Sqrt(
+                            Math.Pow(candidateCenterX - expectedBossFrontFaceCenterX, 2)
+                            + Math.Pow(candidateCenterY - expectedBossFrontFaceCenterY, 2));
+                        if (candidateCenterDelta < bestBossFrontFaceCenterDelta)
+                        {
+                            bestBossFrontFaceCenterDelta = candidateCenterDelta;
+                            bossFrontFace = candidateFace;
+                        }
+                    }
+                }
+            }
+
+            if (bossFrontFace == null)
+                throw new Exception("Could not find the front face of the rectangular boss for the cut sketch");
+
+            swModel.ClearSelection2(true);
+            Entity bossFrontFaceEntity = bossFrontFace as Entity;
+            if (bossFrontFaceEntity == null || !bossFrontFaceEntity.Select4(false, null))
+                throw new Exception("Could not select the front face of the rectangular boss for the cut sketch");
+            swSketchManager.InsertSketch(true);
+
             string savedPath;
             if (SaveToPdm)
             {
