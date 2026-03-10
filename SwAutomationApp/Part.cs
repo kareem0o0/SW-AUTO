@@ -571,7 +571,7 @@ public sealed class Part
         double innerDiameterMm = 640.0;
         double plateThicknessMm = 1.0;
         double slotWidthMm = 20.5;
-        double slotBottomYmm = innerDiameterMm / 2.0; 
+        double slotBottomYmm = innerDiameterMm / 2.0;
         double slotTopYmm = slotBottomYmm + 86.0;
         double bossRectangleHeightMm = 160.0;
         double bossRectangleWidthMm = 8.0;
@@ -619,8 +619,6 @@ public sealed class Part
                 throw new Exception("Failed to create new part");
 
             swSketchManager = swModel.SketchManager;
-            
-            
 
             // Apply material to the  part
             PartDoc statorPart = swModel as PartDoc;
@@ -646,7 +644,7 @@ public sealed class Part
             swDim.SystemValue = Mm(innerDiameterMm);
 
             _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, false);
-            
+
             swModel.ClearSelection2(true);
             if (!SelectSketchByIndex(swModel, 1))
                 throw new Exception("Could not select base annulus sketch");
@@ -777,14 +775,39 @@ public sealed class Part
             SketchSegment bossLeftEdge = (SketchSegment)swSketchManager.CreateLine(bottomLeftX, bottomLeftY, 0, topLeftX, topLeftY, 0);
             if (bossTopEdge == null || bossRightEdge == null || bossBottomEdge == null || bossLeftEdge == null)
                 throw new Exception("Could not create boss rectangle");
-            SketchLine bossTopEdgeLine = bossTopEdge as SketchLine;
-            if (bossTopEdgeLine == null)
-                throw new Exception("Could not access boss top edge geometry");
-            SketchPoint bossTopRightPoint = bossTopEdgeLine.GetEndPoint2();
-            if (bossTopRightPoint == null)
-                throw new Exception("Could not access boss top-right point");
+            SketchSegment bossConstructionLine = (SketchSegment)swSketchManager.CreateCenterLine(0, 0, 0, bossTopCenterX, bossTopCenterY, 0);
+            if (bossConstructionLine == null)
+                throw new Exception("Could not create boss construction line");
+            SketchLine bossConstructionSketchLine = bossConstructionLine as SketchLine;
+            if (bossConstructionSketchLine == null)
+                throw new Exception("Could not access boss construction line geometry");
+            SketchPoint bossConstructionStartPoint = bossConstructionSketchLine.GetStartPoint2();
+            SketchPoint bossConstructionEndPoint = bossConstructionSketchLine.GetEndPoint2();
+            if (bossConstructionStartPoint == null || bossConstructionEndPoint == null)
+                throw new Exception("Could not access boss construction line points");
 
             swModel.ClearSelection2(true);
+            if (!bossConstructionStartPoint.Select4(false, null))
+                throw new Exception("Could not select boss construction line start point");
+            selected = swModel.Extension.SelectByID2("", "EXTSKETCHPOINT", 0, 0, 0, true, 0, null, 0);
+            if (!selected) throw new Exception("Could not select sketch origin for boss construction line");
+            swModel.SketchAddConstraints("sgCOINCIDENT");
+            swModel.ClearSelection2(true);
+
+            if (!bossConstructionEndPoint.Select4(false, null))
+                throw new Exception("Could not select boss construction line end point");
+            if (!bossTopEdge.Select4(true, null))
+                throw new Exception("Could not select boss top edge for construction-line midpoint relation");
+            swModel.SketchAddConstraints("sgATMIDDLE");
+            swModel.ClearSelection2(true);
+
+            if (!bossConstructionLine.Select4(false, null))
+                throw new Exception("Could not select boss construction line for parallel relation");
+            if (!bossRightEdge.Select4(true, null))
+                throw new Exception("Could not select boss right edge for construction-line parallel relation");
+            swModel.SketchAddConstraints("sgPARALLEL");
+            swModel.ClearSelection2(true);
+
             if (!bossTopEdge.Select4(false, null))
                 throw new Exception("Could not select boss top edge for perpendicular relation");
             if (!bossRightEdge.Select4(true, null))
@@ -829,13 +852,11 @@ public sealed class Part
             swDim.SystemValue = bossRectangleWidth;
             swModel.ClearSelection2(true);
 
-            double bossRightMidX = (topRightX + bottomRightX) / 2.0;
-            double bossRightMidY = (topRightY + bottomRightY) / 2.0;
             if (!bossRightEdge.Select4(false, null))
                 throw new Exception("Could not select boss right edge for height dimension");
             displayDim = (DisplayDimension)swModel.AddDimension2(
-                bossRightMidX + bossNormalX * Mm(25),
-                bossRightMidY + bossNormalY * Mm(25),
+                ((topRightX + bottomRightX) / 2.0) + bossNormalX * Mm(25),
+                ((topRightY + bottomRightY) / 2.0) + bossNormalY * Mm(25),
                 0);
             if (displayDim == null) throw new Exception("Could not create boss height dimension");
             swDim = displayDim.GetDimension();
@@ -856,17 +877,6 @@ public sealed class Part
             if (swDim == null) throw new Exception("Could not access boss top offset dimension");
             // Position the top edge at outer-radius minus the requested clearance.
             swDim.SystemValue = bossTopCenterRadius;
-            swModel.ClearSelection2(true);
-
-            if (!bossTopRightPoint.Select4(false, null))
-                throw new Exception("Could not select boss top-right point for horizontal locating dimension");
-            selected = swModel.Extension.SelectByID2("Y-Achse", "AXIS", 0, 0, 0, true, 0, null, 0);
-            if (!selected) throw new Exception("Could not select Y axis for boss horizontal locating dimension");
-            displayDim = (DisplayDimension)swModel.AddDimension2(topRightX / 2.0, topRightY + Mm(20), 0);
-            if (displayDim == null) throw new Exception("Could not create boss horizontal locating dimension");
-            swDim = displayDim.GetDimension();
-            if (swDim == null) throw new Exception("Could not access boss horizontal locating dimension");
-            swDim.SystemValue = Math.Abs(topRightX);
             swModel.ClearSelection2(true);
 
             swSketchManager.InsertSketch(true);
