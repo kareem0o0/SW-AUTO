@@ -578,6 +578,11 @@ public sealed class Part
         double bossOuterDiameterOffsetMm = 9.0;
         double bossCenterlineAngleDeg = 2.96;
         double bossExtrusionDepthMm = 10.0;
+        double bossCutOuterTabWidthMm = 2.0;
+        double bossCutOuterTabHeightMm = 2.5;
+        double bossCutTopShelfThicknessMm = 1.5;
+        double bossCutInnerLegWidthMm = 1.5;
+        double bossCutBoundaryExtensionMm = 2.0;
 
         // Derived dimensions (m)
         double outerRadius = Mm(outerDiameterMm / 2.0);
@@ -600,6 +605,11 @@ public sealed class Part
         double bossDirectionY = Math.Cos(bossCenterlineAngleRadians);
         double bossNormalX = Math.Cos(bossCenterlineAngleRadians);
         double bossNormalY = Math.Sin(bossCenterlineAngleRadians);
+        double bossCutOuterTabWidth = Mm(bossCutOuterTabWidthMm);
+        double bossCutOuterTabHeight = Mm(bossCutOuterTabHeightMm);
+        double bossCutTopShelfThickness = Mm(bossCutTopShelfThicknessMm);
+        double bossCutInnerLegWidth = Mm(bossCutInnerLegWidthMm);
+        double bossCutBoundaryExtension = Mm(bossCutBoundaryExtensionMm);
 
         ModelDoc2 swModel = null;
         SketchManager swSketchManager = null;
@@ -945,7 +955,318 @@ public sealed class Part
             Entity bossFrontFaceEntity = bossFrontFace as Entity;
             if (bossFrontFaceEntity == null || !bossFrontFaceEntity.Select4(false, null))
                 throw new Exception("Could not select the front face of the rectangular boss for the cut sketch");
+            bool bossCutSketchInferenceWasEnabled = _swApp.GetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference);
+            _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, false);
             swSketchManager.InsertSketch(true);
+
+            if (bossCutOuterTabWidth <= 0
+                || bossCutOuterTabHeight <= 0
+                || bossCutTopShelfThickness <= 0
+                || bossCutInnerLegWidth <= 0
+                || bossCutBoundaryExtension <= 0)
+                throw new Exception("Boss cut dimensions must be positive");
+
+            if (bossCutOuterTabHeight <= bossCutTopShelfThickness)
+                throw new Exception("Boss cut outer tab height must exceed the top shelf thickness");
+
+            if (bossCutOuterTabHeight >= bossRectangleWidth
+                || bossCutTopShelfThickness >= bossRectangleWidth)
+                throw new Exception("Boss cut vertical dimensions must fit within the boss width");
+
+            if (bossCutOuterTabWidth >= bossExtrusionDepth
+                || bossCutInnerLegWidth >= bossExtrusionDepth
+                || bossCutOuterTabWidth >= (bossExtrusionDepth - bossCutInnerLegWidth))
+                throw new Exception("Boss cut horizontal dimensions must fit within the boss extrusion depth");
+
+            MathUtility mathUtility = (MathUtility)_swApp.GetMathUtility();
+            if (mathUtility == null)
+                throw new Exception("Could not access SolidWorks math utility for boss cut sketch");
+            Sketch activeBossCutSketch = swModel.GetActiveSketch2() as Sketch;
+            if (activeBossCutSketch == null)
+                throw new Exception("Could not access active boss cut sketch");
+            MathTransform modelToBossCutSketchTransform = activeBossCutSketch.ModelToSketchTransform as MathTransform;
+            if (modelToBossCutSketchTransform == null)
+                throw new Exception("Could not access boss cut sketch transform");
+
+            void CreateBossFrontFaceModelPoint(double xLocal, double yLocal, out double x, out double y, out double z)
+            {
+                x = topLeftX + bossNormalX * yLocal;
+                y = topLeftY + bossNormalY * yLocal;
+                z = plateThickness + bossExtrusionDepth - xLocal;
+            }
+
+            double[] ConvertBossCutPointToSketchCoordinates(double modelX, double modelY, double modelZ)
+            {
+                MathPoint modelPoint = (MathPoint)mathUtility.CreatePoint(new double[] { modelX, modelY, modelZ });
+                if (modelPoint == null)
+                    throw new Exception("Could not create boss cut model point");
+                MathPoint sketchPoint = (MathPoint)modelPoint.MultiplyTransform(modelToBossCutSketchTransform);
+                if (sketchPoint == null)
+                    throw new Exception("Could not transform boss cut point into sketch coordinates");
+                double[] sketchPointData = sketchPoint.ArrayData as double[];
+                if (sketchPointData == null || sketchPointData.Length < 3)
+                    throw new Exception("Could not read transformed boss cut sketch coordinates");
+                return sketchPointData;
+            }
+
+            double[] GetSketchSegmentMidpoint(SketchSegment sketchSegment)
+            {
+                SketchLine sketchLine = sketchSegment as SketchLine;
+                if (sketchLine == null)
+                    throw new Exception("Boss cut reference segment is not a sketch line");
+                SketchPoint startPoint = sketchLine.GetStartPoint2();
+                SketchPoint endPoint = sketchLine.GetEndPoint2();
+                if (startPoint == null || endPoint == null)
+                    throw new Exception("Could not access boss cut reference segment endpoints");
+                return new double[]
+                {
+                    (startPoint.X + endPoint.X) / 2.0,
+                    (startPoint.Y + endPoint.Y) / 2.0
+                };
+            }
+
+            SketchSegment FindClosestBossCutReferenceSegment(object[] referenceSegments, double[] targetMidpoint, string label)
+            {
+                SketchSegment bestSegment = null;
+                double bestDistance = double.MaxValue;
+                foreach (object segmentObj in referenceSegments)
+                {
+                    SketchSegment candidateSegment = segmentObj as SketchSegment;
+                    if (candidateSegment == null)
+                        continue;
+                    double[] candidateMidpoint = GetSketchSegmentMidpoint(candidateSegment);
+                    double candidateDistance = Math.Sqrt(
+                        Math.Pow(candidateMidpoint[0] - targetMidpoint[0], 2)
+                        + Math.Pow(candidateMidpoint[1] - targetMidpoint[1], 2));
+                    if (candidateDistance < bestDistance)
+                    {
+                        bestDistance = candidateDistance;
+                        bestSegment = candidateSegment;
+                    }
+                }
+
+                if (bestSegment == null)
+                    throw new Exception($"Could not find boss cut reference segment for {label}");
+
+                return bestSegment;
+            }
+
+            double bossCutProfileWidth = bossExtrusionDepth;
+            double bossCutProfileHeight = bossRectangleWidth;
+            double bossCutInnerLegStartX = bossCutProfileWidth - bossCutInnerLegWidth;
+            double bossCutOuterX = -bossCutBoundaryExtension;
+            double bossCutMirroredExtensionY = -bossCutBoundaryExtension;
+            double bossCutMirroredShelfY = bossCutProfileHeight - bossCutTopShelfThickness;
+            double bossCutMirroredTabY = bossCutProfileHeight - bossCutOuterTabHeight;
+
+            swModel.ClearSelection2(true);
+            if (!bossFrontFaceEntity.Select4(false, null))
+                throw new Exception("Could not reselect boss front face for cut-sketch references");
+            if (!swSketchManager.SketchUseEdge3(false, false))
+                throw new Exception("Could not convert boss front face edges into cut-sketch references");
+            object[] bossCutReferenceSegments = activeBossCutSketch.GetSketchSegments() as object[];
+            if (bossCutReferenceSegments == null || bossCutReferenceSegments.Length < 4)
+                throw new Exception("Could not access boss front face reference geometry in the cut sketch");
+            foreach (object segmentObj in bossCutReferenceSegments)
+            {
+                SketchSegment referenceSegment = segmentObj as SketchSegment;
+                if (referenceSegment == null)
+                    continue;
+                referenceSegment.ConstructionGeometry = true;
+            }
+            swModel.ClearSelection2(true);
+
+            CreateBossFrontFaceModelPoint(0, bossCutProfileHeight / 2.0, out double outerBoundaryMidModelX, out double outerBoundaryMidModelY, out double outerBoundaryMidModelZ);
+            CreateBossFrontFaceModelPoint(bossCutProfileWidth, bossCutProfileHeight / 2.0, out double innerBoundaryMidModelX, out double innerBoundaryMidModelY, out double innerBoundaryMidModelZ);
+            CreateBossFrontFaceModelPoint(bossCutProfileWidth / 2.0, 0, out double baseBoundaryMidModelX, out double baseBoundaryMidModelY, out double baseBoundaryMidModelZ);
+            CreateBossFrontFaceModelPoint(bossCutProfileWidth / 2.0, bossCutProfileHeight, out double topBoundaryMidModelX, out double topBoundaryMidModelY, out double topBoundaryMidModelZ);
+
+            double[] outerBoundaryMid = ConvertBossCutPointToSketchCoordinates(outerBoundaryMidModelX, outerBoundaryMidModelY, outerBoundaryMidModelZ);
+            double[] innerBoundaryMid = ConvertBossCutPointToSketchCoordinates(innerBoundaryMidModelX, innerBoundaryMidModelY, innerBoundaryMidModelZ);
+            double[] baseBoundaryMid = ConvertBossCutPointToSketchCoordinates(baseBoundaryMidModelX, baseBoundaryMidModelY, baseBoundaryMidModelZ);
+            double[] topBoundaryMid = ConvertBossCutPointToSketchCoordinates(topBoundaryMidModelX, topBoundaryMidModelY, topBoundaryMidModelZ);
+            SketchSegment outerBoundarySegment = FindClosestBossCutReferenceSegment(bossCutReferenceSegments, outerBoundaryMid, "outer boundary");
+            SketchSegment innerBoundarySegment = FindClosestBossCutReferenceSegment(bossCutReferenceSegments, innerBoundaryMid, "inner boundary");
+            SketchSegment baseBoundarySegment = FindClosestBossCutReferenceSegment(bossCutReferenceSegments, baseBoundaryMid, "base boundary");
+            SketchSegment topBoundarySegment = FindClosestBossCutReferenceSegment(bossCutReferenceSegments, topBoundaryMid, "top boundary");
+
+            CreateBossFrontFaceModelPoint(bossCutOuterX, bossCutMirroredExtensionY, out double cutP1ModelX, out double cutP1ModelY, out double cutP1ModelZ);
+            CreateBossFrontFaceModelPoint(bossCutInnerLegStartX, bossCutMirroredExtensionY, out double cutP2ModelX, out double cutP2ModelY, out double cutP2ModelZ);
+            CreateBossFrontFaceModelPoint(bossCutInnerLegStartX, bossCutMirroredShelfY, out double cutP3ModelX, out double cutP3ModelY, out double cutP3ModelZ);
+            CreateBossFrontFaceModelPoint(bossCutOuterTabWidth, bossCutMirroredShelfY, out double cutP4ModelX, out double cutP4ModelY, out double cutP4ModelZ);
+            CreateBossFrontFaceModelPoint(bossCutOuterTabWidth, bossCutMirroredTabY, out double cutP5ModelX, out double cutP5ModelY, out double cutP5ModelZ);
+            CreateBossFrontFaceModelPoint(bossCutOuterX, bossCutMirroredTabY, out double cutP6ModelX, out double cutP6ModelY, out double cutP6ModelZ);
+
+            double[] cutP1 = ConvertBossCutPointToSketchCoordinates(cutP1ModelX, cutP1ModelY, cutP1ModelZ);
+            double[] cutP2 = ConvertBossCutPointToSketchCoordinates(cutP2ModelX, cutP2ModelY, cutP2ModelZ);
+            double[] cutP3 = ConvertBossCutPointToSketchCoordinates(cutP3ModelX, cutP3ModelY, cutP3ModelZ);
+            double[] cutP4 = ConvertBossCutPointToSketchCoordinates(cutP4ModelX, cutP4ModelY, cutP4ModelZ);
+            double[] cutP5 = ConvertBossCutPointToSketchCoordinates(cutP5ModelX, cutP5ModelY, cutP5ModelZ);
+            double[] cutP6 = ConvertBossCutPointToSketchCoordinates(cutP6ModelX, cutP6ModelY, cutP6ModelZ);
+
+            SketchSegment bossCutLine1 = (SketchSegment)swSketchManager.CreateLine(cutP1[0], cutP1[1], 0, cutP2[0], cutP2[1], 0);
+            SketchSegment bossCutLine2 = (SketchSegment)swSketchManager.CreateLine(cutP2[0], cutP2[1], 0, cutP3[0], cutP3[1], 0);
+            SketchSegment bossCutLine3 = (SketchSegment)swSketchManager.CreateLine(cutP3[0], cutP3[1], 0, cutP4[0], cutP4[1], 0);
+            SketchSegment bossCutLine4 = (SketchSegment)swSketchManager.CreateLine(cutP4[0], cutP4[1], 0, cutP5[0], cutP5[1], 0);
+            SketchSegment bossCutLine5 = (SketchSegment)swSketchManager.CreateLine(cutP5[0], cutP5[1], 0, cutP6[0], cutP6[1], 0);
+            SketchSegment bossCutLine6 = (SketchSegment)swSketchManager.CreateLine(cutP6[0], cutP6[1], 0, cutP1[0], cutP1[1], 0);
+            if (bossCutLine1 == null
+                || bossCutLine2 == null
+                || bossCutLine3 == null
+                || bossCutLine4 == null
+                || bossCutLine5 == null
+                || bossCutLine6 == null)
+                throw new Exception("Could not create boss cut profile");
+
+            swModel.ClearSelection2(true);
+            if (!bossCutLine1.Select4(false, null))
+                throw new Exception("Could not select boss cut top line for parallel relation");
+            if (!baseBoundarySegment.Select4(true, null))
+                throw new Exception("Could not select boss cut base reference for mirrored parallel relation");
+            swModel.SketchAddConstraints("sgPARALLEL");
+            swModel.ClearSelection2(true);
+
+            if (!bossCutLine3.Select4(false, null))
+                throw new Exception("Could not select boss cut shelf line for parallel relation");
+            if (!topBoundarySegment.Select4(true, null))
+                throw new Exception("Could not select boss cut top reference for mirrored shelf relation");
+            swModel.SketchAddConstraints("sgPARALLEL");
+            swModel.ClearSelection2(true);
+
+            if (!bossCutLine5.Select4(false, null))
+                throw new Exception("Could not select boss cut tab line for parallel relation");
+            if (!topBoundarySegment.Select4(true, null))
+                throw new Exception("Could not select boss cut top reference for mirrored tab relation");
+            swModel.SketchAddConstraints("sgPARALLEL");
+            swModel.ClearSelection2(true);
+
+            if (!bossCutLine2.Select4(false, null))
+                throw new Exception("Could not select boss cut inner leg for parallel relation");
+            if (!outerBoundarySegment.Select4(true, null))
+                throw new Exception("Could not select boss cut outer-face reference for inner-leg relation");
+            swModel.SketchAddConstraints("sgPARALLEL");
+            swModel.ClearSelection2(true);
+
+            if (!bossCutLine4.Select4(false, null))
+                throw new Exception("Could not select boss cut outer tab leg for parallel relation");
+            if (!outerBoundarySegment.Select4(true, null))
+                throw new Exception("Could not select boss cut outer-face reference for tab-leg relation");
+            swModel.SketchAddConstraints("sgPARALLEL");
+            swModel.ClearSelection2(true);
+
+            if (!bossCutLine6.Select4(false, null))
+                throw new Exception("Could not select boss cut extension leg for parallel relation");
+            if (!outerBoundarySegment.Select4(true, null))
+                throw new Exception("Could not select boss cut outer-face reference for extension-leg relation");
+            swModel.SketchAddConstraints("sgPARALLEL");
+            swModel.ClearSelection2(true);
+
+            if (!bossCutLine4.Select4(false, null))
+                throw new Exception("Could not select boss cut outer tab leg for width dimension");
+            if (!outerBoundarySegment.Select4(true, null))
+                throw new Exception("Could not select boss cut outer-face reference for width dimension");
+            displayDim = (DisplayDimension)swModel.AddHorizontalDimension2(
+                (cutP4[0] + outerBoundaryMid[0]) / 2.0,
+                ((cutP4[1] + cutP5[1]) / 2.0) - Mm(10),
+                0);
+            if (displayDim == null) throw new Exception("Could not create boss cut outer tab width dimension");
+            swDim = displayDim.GetDimension();
+            if (swDim == null) throw new Exception("Could not access boss cut outer tab width dimension");
+            swDim.SystemValue = bossCutOuterTabWidth;
+            swModel.ClearSelection2(true);
+
+            if (!bossCutLine2.Select4(false, null))
+                throw new Exception("Could not select boss cut inner leg for width dimension");
+            if (!innerBoundarySegment.Select4(true, null))
+                throw new Exception("Could not select boss cut inner-face reference for width dimension");
+            displayDim = (DisplayDimension)swModel.AddHorizontalDimension2(
+                (cutP2[0] + innerBoundaryMid[0]) / 2.0,
+                ((cutP2[1] + cutP3[1]) / 2.0) - Mm(10),
+                0);
+            if (displayDim == null) throw new Exception("Could not create boss cut inner leg width dimension");
+            swDim = displayDim.GetDimension();
+            if (swDim == null) throw new Exception("Could not access boss cut inner leg width dimension");
+            swDim.SystemValue = bossCutInnerLegWidth;
+            swModel.ClearSelection2(true);
+
+            if (!bossCutLine3.Select4(false, null))
+                throw new Exception("Could not select boss cut shelf line for height dimension");
+            if (!topBoundarySegment.Select4(true, null))
+                throw new Exception("Could not select boss cut top reference for mirrored shelf height dimension");
+            displayDim = (DisplayDimension)swModel.AddVerticalDimension2(
+                ((cutP3[0] + cutP4[0]) / 2.0) + Mm(10),
+                (cutP3[1] + topBoundaryMid[1]) / 2.0,
+                0);
+            if (displayDim == null) throw new Exception("Could not create boss cut shelf height dimension");
+            swDim = displayDim.GetDimension();
+            if (swDim == null) throw new Exception("Could not access boss cut shelf height dimension");
+            swDim.SystemValue = bossCutTopShelfThickness;
+            swModel.ClearSelection2(true);
+
+            if (!bossCutLine5.Select4(false, null))
+                throw new Exception("Could not select boss cut tab line for height dimension");
+            if (!topBoundarySegment.Select4(true, null))
+                throw new Exception("Could not select boss cut top reference for mirrored tab height dimension");
+            displayDim = (DisplayDimension)swModel.AddVerticalDimension2(
+                ((cutP5[0] + cutP6[0]) / 2.0) + Mm(10),
+                (cutP5[1] + topBoundaryMid[1]) / 2.0,
+                0);
+            if (displayDim == null) throw new Exception("Could not create boss cut tab height dimension");
+            swDim = displayDim.GetDimension();
+            if (swDim == null) throw new Exception("Could not access boss cut tab height dimension");
+            swDim.SystemValue = bossCutOuterTabHeight;
+            swModel.ClearSelection2(true);
+
+            if (!bossCutLine6.Select4(false, null))
+                throw new Exception("Could not select boss cut outer extension line for boundary dimension");
+            if (!outerBoundarySegment.Select4(true, null))
+                throw new Exception("Could not select boss cut outer-face reference for boundary extension dimension");
+            displayDim = (DisplayDimension)swModel.AddHorizontalDimension2(
+                (cutP6[0] + outerBoundaryMid[0]) / 2.0,
+                ((cutP6[1] + cutP1[1]) / 2.0) + Mm(10),
+                0);
+            if (displayDim == null) throw new Exception("Could not create boss cut outer boundary extension dimension");
+            swDim = displayDim.GetDimension();
+            if (swDim == null) throw new Exception("Could not access boss cut outer boundary extension dimension");
+            swDim.SystemValue = bossCutBoundaryExtension;
+            swModel.ClearSelection2(true);
+
+            if (!bossCutLine1.Select4(false, null))
+                throw new Exception("Could not select boss cut top extension line for boundary dimension");
+            if (!baseBoundarySegment.Select4(true, null))
+                throw new Exception("Could not select boss cut base-face reference for mirrored boundary extension dimension");
+            displayDim = (DisplayDimension)swModel.AddVerticalDimension2(
+                ((cutP1[0] + cutP2[0]) / 2.0) - Mm(10),
+                (cutP1[1] + baseBoundaryMid[1]) / 2.0,
+                0);
+            if (displayDim == null) throw new Exception("Could not create boss cut top boundary extension dimension");
+            swDim = displayDim.GetDimension();
+            if (swDim == null) throw new Exception("Could not access boss cut top boundary extension dimension");
+            swDim.SystemValue = bossCutBoundaryExtension;
+            swModel.ClearSelection2(true);
+
+            swSketchManager.InsertSketch(true);
+            _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, bossCutSketchInferenceWasEnabled);
+            Feature CreateBossProfileCut(bool reverseDirection)
+            {
+                swModel.ClearSelection2(true);
+                if (!SelectSketchByIndex(swModel, 4))
+                    throw new Exception("Could not select boss cut sketch");
+                return swModel.FeatureManager.FeatureCut4(
+                    true, false, reverseDirection,
+                    (int)swEndConditions_e.swEndCondThroughAll, 0,
+                    0, 0,
+                    false, false, false, false,
+                    0, 0, false, false, false, false,
+                    false, true, true, true, true, false,
+                    0, 0, false, false);
+            }
+
+            Feature bossCutFeature = CreateBossProfileCut(false);
+            if (bossCutFeature == null)
+                bossCutFeature = CreateBossProfileCut(true);
+            if (bossCutFeature == null)
+                throw new Exception("Failed to create rectangular-boss profile cut");
 
             string savedPath;
             if (SaveToPdm)
