@@ -583,6 +583,7 @@ public sealed class Part
         double bossCutTopShelfThicknessMm = 1.5;
         double bossCutInnerLegWidthMm = 1.5;
         double bossCutBoundaryExtensionMm = 2.0;
+        int bossCircularPatternCount = 60;
 
         // Derived dimensions (m)
         double outerRadius = Mm(outerDiameterMm / 2.0);
@@ -1267,6 +1268,85 @@ public sealed class Part
                 bossCutFeature = CreateBossProfileCut(true);
             if (bossCutFeature == null)
                 throw new Exception("Failed to create rectangular-boss profile cut");
+
+            if (bossCircularPatternCount < 2)
+                throw new Exception("Boss circular pattern count must be at least 2");
+
+            PartDoc distanceSheetPart = swModel as PartDoc;
+            if (distanceSheetPart == null)
+                throw new Exception("Could not access part document for boss body pattern");
+
+            object[] solidBodies = distanceSheetPart.GetBodies2((int)swBodyType_e.swSolidBody, true) as object[];
+            Body2 patternedBossBody = null;
+            double expectedBossBodyCenterX = (bossTopCenterX + bossBottomCenterX) / 2.0;
+            double expectedBossBodyCenterY = (bossTopCenterY + bossBottomCenterY) / 2.0;
+            double bestBossBodyCenterDelta = double.MaxValue;
+            if (solidBodies != null)
+            {
+                foreach (object bodyObj in solidBodies)
+                {
+                    Body2 candidateBody = bodyObj as Body2;
+                    if (candidateBody == null)
+                        continue;
+
+                    double[] candidateBodyBox = candidateBody.GetBodyBox() as double[];
+                    if (candidateBodyBox == null || candidateBodyBox.Length < 6)
+                        continue;
+
+                    if (Math.Abs(candidateBodyBox[2] - plateThickness) >= bossFaceTolerance
+                        || Math.Abs(candidateBodyBox[5] - (plateThickness + bossExtrusionDepth)) >= bossFaceTolerance)
+                        continue;
+
+                    double candidateBodyCenterX = (candidateBodyBox[0] + candidateBodyBox[3]) / 2.0;
+                    double candidateBodyCenterY = (candidateBodyBox[1] + candidateBodyBox[4]) / 2.0;
+                    double candidateCenterDelta = Math.Sqrt(
+                        Math.Pow(candidateBodyCenterX - expectedBossBodyCenterX, 2)
+                        + Math.Pow(candidateBodyCenterY - expectedBossBodyCenterY, 2));
+                    if (candidateCenterDelta < bestBossBodyCenterDelta)
+                    {
+                        bestBossBodyCenterDelta = candidateCenterDelta;
+                        patternedBossBody = candidateBody;
+                    }
+                }
+            }
+
+            if (patternedBossBody == null)
+                throw new Exception("Could not find the finished rectangular boss body for circular pattern");
+
+            SelectionMgr selectionMgr = swModel.SelectionManager as SelectionMgr;
+            if (selectionMgr == null)
+                throw new Exception("Could not access selection manager for boss body pattern");
+            SelectData bodyPatternSelectData = selectionMgr.CreateSelectData();
+            if (bodyPatternSelectData == null)
+                throw new Exception("Could not create selection data for boss body pattern");
+            bodyPatternSelectData.Mark = 256;
+
+            swModel.ClearSelection2(true);
+            selected = swModel.Extension.SelectByID2("Z-Achse", "AXIS", 0, 0, 0, false, 1, null, 0);
+            if (!selected) throw new Exception("Could not select Z axis for boss body circular pattern");
+            if (!patternedBossBody.Select2(true, bodyPatternSelectData))
+                throw new Exception("Could not select finished boss body for circular pattern");
+            Feature bossBodyPattern = (Feature)swModel.FeatureManager.FeatureCircularPattern5(
+                bossCircularPatternCount,
+                2 * Math.PI,
+                false,
+                "",
+                true,
+                true,
+                false,
+                true,
+                false,
+                false,
+                0,
+                0.0,
+                "",
+                false
+            );
+            if (bossBodyPattern == null)
+                throw new Exception("Failed to create circular pattern of the rectangular boss body");
+
+            swModel.ShowNamedView2("*Front", (int)swStandardViews_e.swFrontView);
+            swModel.ViewZoomtofit2();
 
             string savedPath;
             if (SaveToPdm)
