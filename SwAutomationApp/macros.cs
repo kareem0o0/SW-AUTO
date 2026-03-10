@@ -50,7 +50,7 @@ public static class Project1
             outFolder: outFolder,
             closeAfterCreate: true,
             SaveToPdm: false);
-            
+
         string statorsheet = part.Create_stator_sheet(outFolder, true, SaveToPdm: false);
         string shaft = part.Create_shaft(outFolder, true, SaveToPdm: false);
         string machine = assembly.CreateAssembly(outFolder, "MachineAssembly.SLDASM", closeAfterCreate: false, SaveToPdm: false);
@@ -64,5 +64,12 @@ public static class Project1
         assembly.ApplyCoincedentMate(inserted_skeleton, "Ebene vorne", inserted_statorsheet, "Ebene rechts");
         assembly.ApplyCoincedentMate(inserted_skeleton, "X-Achse", inserted_shaft, "Z-Achse");
         System.Console.WriteLine($"Macro completed. Machine assembly: {machine}");
+    }
+            public static void Run3(string outFolder, Part part, Assembly assembly)
+    {
+        if (string.IsNullOrWhiteSpace(outFolder))
+            throw new System.ArgumentException("Output folder is required.", nameof(outFolder));
+
+        string statorsheet = part.Create_stator_distance_sheet(outFolder, false, SaveToPdm: false);
     }
 }
