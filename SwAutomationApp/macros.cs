@@ -72,6 +72,8 @@ public static class Project1
 
         //string statorsheet = part.Create_stator_distance_sheet(outFolder, false, SaveToPdm: false);
         //string statorend = part.Create_stator_end_sheet(outFolder, false, SaveToPdm: false);
-        string torsionbar = part.Create_torsion_bar(outFolder, false, SaveToPdm: false);
+        //string torsionbar = part.Create_torsion_bar(outFolder, false, SaveToPdm: false);
+        string pressPlate = part.Create_press_plate(outFolder, false, SaveToPdm: false);
+
     }
 }

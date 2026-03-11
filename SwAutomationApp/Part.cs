@@ -1977,4 +1977,281 @@ public sealed class Part
             return null;
         }
     }
+
+    public string Create_press_plate(string outFolder, bool closeAfterCreate = false, bool SaveToPdm = false)
+    {
+        double Mm(double mm) => mm * MmToMeters;
+        using var automationUi = BeginAutomationUiSuppression();
+        bool SelectSketchByIndex(ModelDoc2 model, int index)
+        {
+            return model.Extension.SelectByID2($"Skizze{index}", "SKETCH", 0, 0, 0, false, 0, null, 0)
+                || model.Extension.SelectByID2($"Sketch{index}", "SKETCH", 0, 0, 0, false, 0, null, 0);
+        }
+
+        // Main dimensions (mm) - change these only.
+        double outerDiameterMm = 990.0;
+        double ringInnerDiameterMm = 840.0;
+        double plateInnerReferenceDiameterMm = 660.0;
+        double ringThicknessMm = 2.0;
+        double plateBodyThicknessMm = 10.0;
+        double plateWidthMm = 6.0;
+        int plateCount = 60;
+
+        // Derived dimensions (m)
+        double outerRadius = Mm(outerDiameterMm / 2.0);
+        double ringInnerRadius = Mm(ringInnerDiameterMm / 2.0);
+        double plateInnerRadius = Mm(plateInnerReferenceDiameterMm / 2.0);
+        double ringThickness = Mm(ringThicknessMm);
+        double plateBodyThickness = Mm(plateBodyThicknessMm);
+        double plateHalfWidth = Mm(plateWidthMm / 2.0);
+        double plateOuterY = outerRadius;
+        double plateInnerY = plateInnerRadius;
+        double plateCenterY = (plateOuterY + plateInnerY) / 2.0;
+        double plateHeight = plateOuterY - plateInnerY;
+
+        ModelDoc2 swModel = null;
+        SketchManager swSketchManager = null;
+
+        try
+        {
+            Dimension swDim = null;
+            DisplayDimension displayDim = null;
+            bool pressPlateSketchInferenceWasEnabled = _swApp.GetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference);
+
+            if (!Directory.Exists(outFolder))
+                Directory.CreateDirectory(outFolder);
+
+            string template = _swApp.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplatePart);
+            swModel = (ModelDoc2)_swApp.NewDocument(template, 0, 0, 0);
+
+            if (swModel == null)
+                throw new Exception("Failed to create new part");
+
+            swSketchManager = swModel.SketchManager;
+
+            PartDoc pressPlatePart = swModel as PartDoc;
+            pressPlatePart.SetMaterialPropertyName2("", "", Name: "AISI 1020");
+
+            bool selected = swModel.Extension.SelectByID2("Ebene vorne", "PLANE", 0, 0, 0, false, 0, null, 0);
+            if (!selected) throw new Exception("Could not select Front Plane for press plate");
+
+            swSketchManager.InsertSketch(true);
+            swSketchManager.CreateCircleByRadius(0, 0, 0, outerRadius);
+            swSketchManager.CreateCircleByRadius(0, 0, 0, ringInnerRadius);
+            _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, false);
+            swModel.ClearSelection2(true);
+            selected = swModel.Extension.SelectByID2("", "SKETCHSEGMENT", outerRadius, 0, 0, false, 0, null, 0);
+            if (!selected) throw new Exception("Could not select press-plate outer circle");
+            displayDim = (DisplayDimension)swModel.AddDimension2(outerRadius + Mm(20), Mm(20), 0);
+            if (displayDim == null) throw new Exception("Could not create press-plate outer diameter dimension");
+            swDim = displayDim.GetDimension();
+            if (swDim == null) throw new Exception("Could not access press-plate outer diameter dimension");
+            swDim.SystemValue = Mm(outerDiameterMm);
+
+            swModel.ClearSelection2(true);
+            selected = swModel.Extension.SelectByID2("", "SKETCHSEGMENT", ringInnerRadius, 0, 0, false, 0, null, 0);
+            if (!selected) throw new Exception("Could not select press-plate ring inner circle");
+            displayDim = (DisplayDimension)swModel.AddDimension2(ringInnerRadius + Mm(20), Mm(20), 0);
+            if (displayDim == null) throw new Exception("Could not create press-plate ring inner diameter dimension");
+            swDim = displayDim.GetDimension();
+            if (swDim == null) throw new Exception("Could not access press-plate ring inner diameter dimension");
+            swDim.SystemValue = Mm(ringInnerDiameterMm);
+
+            swModel.ClearSelection2(true);
+            if (!SelectSketchByIndex(swModel, 1))
+                throw new Exception("Could not select press-plate ring sketch");
+            Feature ringFeature = swModel.FeatureManager.FeatureExtrusion2(
+                true, false, false,
+                (int)swEndConditions_e.swEndCondBlind, 0,
+                ringThickness, 0,
+                false, false, false, false,
+                0, 0, false, false, false, false,
+                true, true, true, 0, 0, false);
+            if (ringFeature == null)
+                throw new Exception("Failed to create press-plate ring");
+
+            swModel.ClearSelection2(true);
+            selected = swModel.Extension.SelectByID2("Ebene vorne", "PLANE", 0, 0, 0, false, 0, null, 0);
+            if (!selected) throw new Exception("Could not reselect Front Plane for press-plate body");
+
+            swSketchManager.InsertSketch(true);
+            SketchSegment topLineSegment = swSketchManager.CreateLine(-plateHalfWidth, plateOuterY, 0, plateHalfWidth, plateOuterY, 0) as SketchSegment;
+            SketchSegment rightLineSegment = swSketchManager.CreateLine(plateHalfWidth, plateOuterY, 0, plateHalfWidth, plateInnerY, 0) as SketchSegment;
+            SketchSegment bottomLineSegment = swSketchManager.CreateLine(plateHalfWidth, plateInnerY, 0, -plateHalfWidth, plateInnerY, 0) as SketchSegment;
+            SketchSegment leftLineSegment = swSketchManager.CreateLine(-plateHalfWidth, plateInnerY, 0, -plateHalfWidth, plateOuterY, 0) as SketchSegment;
+            SketchLine topLine = topLineSegment as SketchLine;
+            SketchLine rightLine = rightLineSegment as SketchLine;
+            SketchLine bottomLine = bottomLineSegment as SketchLine;
+            SketchLine leftLine = leftLineSegment as SketchLine;
+            if (topLineSegment == null || rightLineSegment == null || bottomLineSegment == null || leftLineSegment == null
+                || topLine == null || rightLine == null || bottomLine == null || leftLine == null)
+                throw new Exception("Could not create press-plate body rectangle");
+
+            SketchPoint LineStart(SketchLine line) => line.GetStartPoint2();
+            SketchPoint LineEnd(SketchLine line) => line.GetEndPoint2();
+
+            if (!(LineEnd(topLine)?.Select4(false, null) ?? false))
+                throw new Exception("Could not select press-plate top-right point for closure");
+            if (!(LineStart(rightLine)?.Select4(true, null) ?? false))
+                throw new Exception("Could not select press-plate right-top point for closure");
+            swModel.SketchAddConstraints("sgCOINCIDENT");
+            swModel.ClearSelection2(true);
+
+            if (!(LineEnd(rightLine)?.Select4(false, null) ?? false))
+                throw new Exception("Could not select press-plate bottom-right point for closure");
+            if (!(LineStart(bottomLine)?.Select4(true, null) ?? false))
+                throw new Exception("Could not select press-plate bottom-right bottom-line point for closure");
+            swModel.SketchAddConstraints("sgCOINCIDENT");
+            swModel.ClearSelection2(true);
+
+            if (!(LineEnd(bottomLine)?.Select4(false, null) ?? false))
+                throw new Exception("Could not select press-plate bottom-left point for closure");
+            if (!(LineStart(leftLine)?.Select4(true, null) ?? false))
+                throw new Exception("Could not select press-plate left-bottom point for closure");
+            swModel.SketchAddConstraints("sgCOINCIDENT");
+            swModel.ClearSelection2(true);
+
+            if (!(LineEnd(leftLine)?.Select4(false, null) ?? false))
+                throw new Exception("Could not select press-plate left-top point for closure");
+            if (!(LineStart(topLine)?.Select4(true, null) ?? false))
+                throw new Exception("Could not select press-plate top-left point for closure");
+            swModel.SketchAddConstraints("sgCOINCIDENT");
+            swModel.ClearSelection2(true);
+
+            if (!topLineSegment.Select4(false, null))
+                throw new Exception("Could not select press-plate top line");
+            swModel.SketchAddConstraints("sgHORIZONTAL");
+            swModel.ClearSelection2(true);
+
+            if (!bottomLineSegment.Select4(false, null))
+                throw new Exception("Could not select press-plate bottom line");
+            swModel.SketchAddConstraints("sgHORIZONTAL");
+            swModel.ClearSelection2(true);
+
+            if (!rightLineSegment.Select4(false, null))
+                throw new Exception("Could not select press-plate right line");
+            swModel.SketchAddConstraints("sgVERTICAL");
+            swModel.ClearSelection2(true);
+
+            if (!leftLineSegment.Select4(false, null))
+                throw new Exception("Could not select press-plate left line");
+            swModel.SketchAddConstraints("sgVERTICAL");
+            swModel.ClearSelection2(true);
+
+            swModel.ClearSelection2(true);
+            if (!(LineStart(topLine)?.Select4(false, null) ?? false))
+                throw new Exception("Could not select press-plate body top-left point");
+            if (!(LineEnd(topLine)?.Select4(true, null) ?? false))
+                throw new Exception("Could not select press-plate body top-right point for width");
+            displayDim = (DisplayDimension)swModel.AddHorizontalDimension2(Mm(10), plateOuterY + Mm(10), 0);
+            if (displayDim == null) throw new Exception("Could not create press-plate body width dimension");
+            swDim = displayDim.GetDimension();
+            if (swDim == null) throw new Exception("Could not access press-plate body width dimension");
+            swDim.SystemValue = plateHalfWidth * 2.0;
+
+            swModel.ClearSelection2(true);
+            if (!(LineEnd(rightLine)?.Select4(false, null) ?? false))
+                throw new Exception("Could not select press-plate body bottom-right point");
+            if (!(LineStart(rightLine)?.Select4(true, null) ?? false))
+                throw new Exception("Could not select press-plate body top-right point");
+            displayDim = (DisplayDimension)swModel.AddVerticalDimension2(plateHalfWidth + Mm(20), plateCenterY, 0);
+            if (displayDim == null) throw new Exception("Could not create press-plate body height dimension");
+            swDim = displayDim.GetDimension();
+            if (swDim == null) throw new Exception("Could not access press-plate body height dimension");
+            swDim.SystemValue = plateHeight;
+
+            swModel.ClearSelection2(true);
+            if (!(LineEnd(topLine)?.Select4(false, null) ?? false))
+                throw new Exception("Could not select press-plate body top-right point for horizontal location");
+            selected = swModel.Extension.SelectByID2("", "EXTSKETCHPOINT", 0, 0, 0, true, 0, null, 0);
+            if (!selected) throw new Exception("Could not select sketch origin for press-plate body horizontal location");
+            displayDim = (DisplayDimension)swModel.AddHorizontalDimension2(plateHalfWidth / 2.0, plateOuterY + Mm(20), 0);
+            if (displayDim == null) throw new Exception("Could not create press-plate body horizontal location dimension");
+            swDim = displayDim.GetDimension();
+            if (swDim == null) throw new Exception("Could not access press-plate body horizontal location dimension");
+            swDim.SystemValue = plateHalfWidth;
+            swModel.ClearSelection2(true);
+
+            if (!(LineEnd(topLine)?.Select4(false, null) ?? false))
+                throw new Exception("Could not reselect press-plate body top-right point");
+            selected = swModel.Extension.SelectByID2("", "EXTSKETCHPOINT", 0, 0, 0, true, 0, null, 0);
+            if (!selected) throw new Exception("Could not select sketch origin for press-plate body top offset");
+            displayDim = (DisplayDimension)swModel.AddVerticalDimension2(plateHalfWidth + Mm(20), plateOuterY / 2.0, 0);
+            if (displayDim == null) throw new Exception("Could not create press-plate body top offset dimension");
+            swDim = displayDim.GetDimension();
+            if (swDim == null) throw new Exception("Could not access press-plate body top offset dimension");
+            swDim.SystemValue = outerRadius;
+            swModel.ClearSelection2(true);
+
+            swSketchManager.InsertSketch(true);
+            if (!SelectSketchByIndex(swModel, 2))
+                throw new Exception("Could not select press-plate body sketch");
+            Feature plateFeature = swModel.FeatureManager.FeatureExtrusion2(
+                true, true, false,
+                (int)swEndConditions_e.swEndCondBlind, 0,
+                plateBodyThickness, 0,
+                false, false, false, false,
+                0, 0, false, false, false, false,
+                false, true, true, 0, 0, false);
+            if (plateFeature == null)
+                throw new Exception("Failed to create separate press-plate body");
+
+            swModel.ClearSelection2(true);
+            selected = swModel.Extension.SelectByID2("Z-Achse", "AXIS", 0, 0, 0, false, 1, null, 0);
+            if (!selected) throw new Exception("Could not select Z axis for press-plate circular pattern");
+            if (!plateFeature.Select2(true, 4))
+                throw new Exception("Could not select press-plate body feature for circular pattern");
+            Feature platePattern = (Feature)swModel.FeatureManager.FeatureCircularPattern5(
+                plateCount,
+                2 * Math.PI,
+                false,
+                "",
+                true,
+                true,
+                false,
+                true,
+                false,
+                false,
+                0,
+                0.0,
+                "",
+                false
+            );
+            if (platePattern == null)
+                throw new Exception("Failed to create press-plate circular pattern");
+
+            swModel.ClearSelection2(true);
+            swModel.ShowNamedView2("*Front", (int)swStandardViews_e.swFrontView);
+            swModel.ViewZoomtofit2();
+
+            string savedPath;
+            if (SaveToPdm)
+            {
+                savedPath = _pdm.SaveAsPdm(swModel, outFolder);
+                Console.WriteLine($"Part saved to PDM: {savedPath}");
+            }
+            else
+            {
+                savedPath = Path.Combine(outFolder, "PressPlate.SLDPRT");
+                swModel.SaveAs3(savedPath, 0, 1);
+                Console.WriteLine($"Part saved locally: {savedPath}");
+            }
+
+            if (closeAfterCreate)
+            {
+                _swApp.CloseDoc(swModel.GetTitle());
+                Console.WriteLine("Part closed after creating.");
+            }
+
+            _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, pressPlateSketchInferenceWasEnabled);
+            Console.WriteLine("Done!");
+            return Path.GetFileName(savedPath);
+        }
+        catch (Exception ex)
+        {
+            try { _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, true); } catch { }
+            Console.WriteLine("Fatal error: " + ex);
+            return null;
+        }
+    }
 }
