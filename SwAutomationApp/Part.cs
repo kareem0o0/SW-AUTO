@@ -2261,6 +2261,7 @@ public sealed class Part
     {
         double Mm(double mm) => mm * MmToMeters;
         using var automationUi = BeginAutomationUiSuppression();
+
         bool SelectSketchByIndex(ModelDoc2 model, int index)
         {
             return model.Extension.SelectByID2($"Skizze{index}", "SKETCH", 0, 0, 0, false, 0, null, 0)
@@ -2271,8 +2272,10 @@ public sealed class Part
         double outerDiameterMm = 1090.0;
         double innerDiameterMm = 840.0;
         double pressRingOuterDiameterMm = 870.0;
-        double ringThicknessMm = 30.0;
-        double pressRingThicknessMm = 10.0;
+        double ringThicknessMm = 28.0;
+        double pressRingThicknessMm = 2.0;
+        double baseInnerChamferDistanceMm = 20.0;
+        double baseInnerChamferAngleDeg = 30.0;
         double pocketCenterRadiusMm = 493.0;
         double pocketWidthMm = 36.0;
         double pocketHeightMm = 43.0;
@@ -2285,13 +2288,14 @@ public sealed class Part
         double pressRingOuterRadius = Mm(pressRingOuterDiameterMm / 2.0);
         double ringThickness = Mm(ringThicknessMm);
         double pressRingThickness = Mm(pressRingThicknessMm);
+        double baseInnerChamferDistance = Mm(baseInnerChamferDistanceMm);
+        double baseInnerChamferAngleRadians = baseInnerChamferAngleDeg * Math.PI / 180.0;
         double pocketCenterY = Mm(pocketCenterRadiusMm);
         double pocketCornerRadius = Mm(pocketCornerRadiusMm);
         double pocketHalfWidth = Mm(pocketWidthMm / 2.0);
         double pocketHalfHeight = Mm(pocketHeightMm / 2.0);
         double pocketCircleTopCenterY = pocketCenterY + pocketHalfHeight;
         double pocketCircleBottomCenterY = pocketCenterY - pocketHalfHeight;
-
         ModelDoc2 swModel = null;
         SketchManager swSketchManager = null;
 
@@ -2315,6 +2319,182 @@ public sealed class Part
                     0, 0, false, false, false, false,
                     false, true, true, true, true, false,
                     0, 0, false, false);
+            }
+
+            void ConvertPocketReferenceDiagonalsToConstruction()
+            {
+                Sketch activePocketSketch = swModel.GetActiveSketch2() as Sketch;
+                if (activePocketSketch == null)
+                    throw new Exception("Could not access active stator pressring NDE pocket sketch");
+
+                object[] sketchSegments = activePocketSketch.GetSketchSegments() as object[];
+                if (sketchSegments == null || sketchSegments.Length == 0)
+                    throw new Exception("Could not access stator pressring NDE pocket sketch segments");
+
+                const double axisTolerance = 1e-9;
+                var diagonalSegments = new System.Collections.Generic.List<SketchSegment>();
+
+                foreach (object segmentObj in sketchSegments)
+                {
+                    SketchLine sketchLine = segmentObj as SketchLine;
+                    if (sketchLine == null)
+                        continue;
+
+                    SketchPoint startPoint = sketchLine.GetStartPoint2();
+                    SketchPoint endPoint = sketchLine.GetEndPoint2();
+                    if (startPoint == null || endPoint == null)
+                        continue;
+
+                    double dx = Math.Abs(endPoint.X - startPoint.X);
+                    double dy = Math.Abs(endPoint.Y - startPoint.Y);
+                    if (dx > axisTolerance && dy > axisTolerance)
+                        diagonalSegments.Add((SketchSegment)sketchLine);
+                }
+
+                if (diagonalSegments.Count == 0)
+                    return;
+
+                for (int i = 0; i < diagonalSegments.Count; i++)
+                {
+                    diagonalSegments[i].ConstructionGeometry = true;
+                }
+
+                swModel.ClearSelection2(true);
+            }
+
+            double[] GetSketchSegmentMidpoint(SketchSegment segment)
+            {
+                SketchLine line = segment as SketchLine;
+                if (line == null)
+                    throw new Exception("Expected stator pressring NDE pocket reference line");
+
+                SketchPoint startPoint = line.GetStartPoint2();
+                SketchPoint endPoint = line.GetEndPoint2();
+                if (startPoint == null || endPoint == null)
+                    throw new Exception("Could not access stator pressring NDE pocket reference endpoints");
+
+                return new double[]
+                {
+                    (startPoint.X + endPoint.X) / 2.0,
+                    (startPoint.Y + endPoint.Y) / 2.0
+                };
+            }
+
+            SketchSegment FindClosestPocketReferenceSegment(object[] sketchSegments, double targetX, double targetY, string label)
+            {
+                SketchSegment bestSegment = null;
+                double bestDistance = double.MaxValue;
+
+                foreach (object segmentObj in sketchSegments)
+                {
+                    SketchSegment candidate = segmentObj as SketchSegment;
+                    if (candidate == null)
+                        continue;
+
+                    double[] midpoint = GetSketchSegmentMidpoint(candidate);
+                    double distance = Math.Sqrt(
+                        Math.Pow(midpoint[0] - targetX, 2)
+                        + Math.Pow(midpoint[1] - targetY, 2));
+
+                    if (distance < bestDistance)
+                    {
+                        bestDistance = distance;
+                        bestSegment = candidate;
+                    }
+                }
+
+                if (bestSegment == null)
+                    throw new Exception($"Could not find stator pressring NDE pocket reference {label}");
+
+                return bestSegment;
+            }
+
+            SketchPoint GetLeftEndpoint(SketchSegment segment)
+            {
+                SketchLine line = segment as SketchLine;
+                if (line == null)
+                    throw new Exception("Expected stator pressring NDE pocket reference line");
+
+                SketchPoint startPoint = line.GetStartPoint2();
+                SketchPoint endPoint = line.GetEndPoint2();
+                if (startPoint == null || endPoint == null)
+                    throw new Exception("Could not access stator pressring NDE pocket reference endpoints");
+
+                return startPoint.X <= endPoint.X ? startPoint : endPoint;
+            }
+
+            SketchPoint GetRightEndpoint(SketchSegment segment)
+            {
+                SketchLine line = segment as SketchLine;
+                if (line == null)
+                    throw new Exception("Expected stator pressring NDE pocket reference line");
+
+                SketchPoint startPoint = line.GetStartPoint2();
+                SketchPoint endPoint = line.GetEndPoint2();
+                if (startPoint == null || endPoint == null)
+                    throw new Exception("Could not access stator pressring NDE pocket reference endpoints");
+
+                return startPoint.X >= endPoint.X ? startPoint : endPoint;
+            }
+
+            Edge FindBaseInnerChamferEdge(Feature baseFeature)
+            {
+                object[] baseFaces = baseFeature?.GetFaces() as object[];
+                if (baseFaces == null || baseFaces.Length == 0)
+                    throw new Exception("Could not access stator pressring NDE base ring faces for chamfer");
+
+                double faceTolerance = Mm(0.01);
+                double radiusTolerance = Mm(0.05);
+                Face2 bottomPlanarFace = null;
+
+                foreach (object faceObj in baseFaces)
+                {
+                    Face2 candidateFace = faceObj as Face2;
+                    if (candidateFace == null)
+                        continue;
+
+                    Surface candidateSurface = candidateFace.GetSurface();
+                    if (candidateSurface == null || !candidateSurface.IsPlane())
+                        continue;
+
+                    double[] candidateBox = candidateFace.GetBox() as double[];
+                    if (candidateBox == null || candidateBox.Length < 6)
+                        continue;
+
+                    if (Math.Abs(candidateBox[2]) < faceTolerance && Math.Abs(candidateBox[5]) < faceTolerance)
+                    {
+                        bottomPlanarFace = candidateFace;
+                        break;
+                    }
+                }
+
+                if (bottomPlanarFace == null)
+                    throw new Exception("Could not find stator pressring NDE base bottom face for chamfer");
+
+                object[] faceEdges = bottomPlanarFace.GetEdges() as object[];
+                if (faceEdges == null || faceEdges.Length == 0)
+                    throw new Exception("Could not access stator pressring NDE base bottom-face edges for chamfer");
+
+                foreach (object edgeObj in faceEdges)
+                {
+                    Edge candidateEdge = edgeObj as Edge;
+                    if (candidateEdge == null)
+                        continue;
+
+                    Curve candidateCurve = candidateEdge.GetCurve();
+                    if (candidateCurve == null || !candidateCurve.IsCircle())
+                        continue;
+
+                    double[] circleParams = candidateCurve.CircleParams as double[];
+                    if (circleParams == null || circleParams.Length < 7)
+                        continue;
+
+                    double candidateRadius = circleParams[6];
+                    if (Math.Abs(candidateRadius - innerRadius) < radiusTolerance)
+                        return candidateEdge;
+                }
+
+                throw new Exception("Could not find stator pressring NDE base inner circular edge for chamfer");
             }
 
             if (!Directory.Exists(outFolder))
@@ -2378,6 +2558,40 @@ public sealed class Part
                 throw new Exception("Failed to create stator pressring NDE base ring");
 
             swModel.ClearSelection2(true);
+            Edge baseInnerChamferEdge = FindBaseInnerChamferEdge(baseRingFeature);
+            Entity baseInnerChamferEdgeEntity = baseInnerChamferEdge as Entity;
+            if (baseInnerChamferEdgeEntity == null || !baseInnerChamferEdgeEntity.Select4(false, null))
+                throw new Exception("Could not select stator pressring NDE base inner edge for chamfer");
+
+            Feature baseInnerChamferFeature = swModel.FeatureManager.InsertFeatureChamfer(
+                0,
+                (int)swChamferType_e.swChamferAngleDistance,
+                baseInnerChamferDistance,
+                baseInnerChamferAngleRadians,
+                0,
+                0,
+                0,
+                0);
+            if (baseInnerChamferFeature == null)
+            {
+                swModel.ClearSelection2(true);
+                if (!baseInnerChamferEdgeEntity.Select4(false, null))
+                    throw new Exception("Could not reselect stator pressring NDE base inner edge for flipped chamfer");
+
+                baseInnerChamferFeature = swModel.FeatureManager.InsertFeatureChamfer(
+                    (int)swFeatureChamferOption_e.swFeatureChamferFlipDirection,
+                    (int)swChamferType_e.swChamferAngleDistance,
+                    baseInnerChamferDistance,
+                    baseInnerChamferAngleRadians,
+                    0,
+                    0,
+                    0,
+                    0);
+            }
+            if (baseInnerChamferFeature == null)
+                throw new Exception("Failed to create stator pressring NDE base inner chamfer");
+
+            swModel.ClearSelection2(true);
             selected = swModel.Extension.SelectByID2(
                 "",
                 "FACE",
@@ -2393,7 +2607,6 @@ public sealed class Part
 
             swSketchManager.InsertSketch(true);
             swSketchManager.CreateCenterRectangle(0, pocketCenterY, 0, pocketHalfWidth, pocketCircleTopCenterY, 0);
-
             swModel.ClearSelection2(true);
             selected = swModel.Extension.SelectByID2("", "SKETCHSEGMENT", 0, pocketCircleTopCenterY, 0, false, 0, null, 0);
             if (!selected)
@@ -2446,28 +2659,133 @@ public sealed class Part
             swDim.SystemValue = pocketCenterY;
             swModel.ClearSelection2(true);
 
-            selected = swModel.Extension.SelectByID2("", "SKETCHSEGMENT", 0, pocketCircleTopCenterY, 0, false, 0, null, 0);
-            if (!selected)
+            ConvertPocketReferenceDiagonalsToConstruction();
+
+            Sketch activePocketReferenceSketch = swModel.GetActiveSketch2() as Sketch;
+            if (activePocketReferenceSketch == null)
+                throw new Exception("Could not access stator pressring NDE pocket reference sketch");
+            object[] pocketReferenceSegments = activePocketReferenceSketch.GetSketchSegments() as object[];
+            if (pocketReferenceSegments == null || pocketReferenceSegments.Length < 4)
+                throw new Exception("Could not access stator pressring NDE pocket reference segments");
+
+            SketchSegment pocketReferenceTopEdge = FindClosestPocketReferenceSegment(
+                pocketReferenceSegments, 0, pocketCircleTopCenterY, "top edge");
+            SketchSegment pocketReferenceRightEdge = FindClosestPocketReferenceSegment(
+                pocketReferenceSegments, pocketHalfWidth, pocketCenterY, "right edge");
+            SketchSegment pocketReferenceBottomEdge = FindClosestPocketReferenceSegment(
+                pocketReferenceSegments, 0, pocketCircleBottomCenterY, "bottom edge");
+            SketchSegment pocketReferenceLeftEdge = FindClosestPocketReferenceSegment(
+                pocketReferenceSegments, -pocketHalfWidth, pocketCenterY, "left edge");
+
+            SketchPoint topLeftReferenceCorner = GetLeftEndpoint(pocketReferenceTopEdge);
+            SketchPoint topRightReferenceCorner = GetRightEndpoint(pocketReferenceTopEdge);
+            SketchPoint bottomLeftReferenceCorner = GetLeftEndpoint(pocketReferenceBottomEdge);
+            SketchPoint bottomRightReferenceCorner = GetRightEndpoint(pocketReferenceBottomEdge);
+
+            swModel.ClearSelection2(true);
+            if (!pocketReferenceTopEdge.Select4(false, null))
+                throw new Exception("Could not select stator pressring NDE pocket reference top edge for horizontal relation");
+            swModel.SketchAddConstraints("sgHORIZONTAL");
+            swModel.ClearSelection2(true);
+
+            if (!pocketReferenceBottomEdge.Select4(false, null))
+                throw new Exception("Could not select stator pressring NDE pocket reference bottom edge for horizontal relation");
+            swModel.SketchAddConstraints("sgHORIZONTAL");
+            swModel.ClearSelection2(true);
+
+            if (!pocketReferenceRightEdge.Select4(false, null))
+                throw new Exception("Could not select stator pressring NDE pocket reference right edge for vertical relation");
+            swModel.SketchAddConstraints("sgVERTICAL");
+            swModel.ClearSelection2(true);
+
+            if (!pocketReferenceLeftEdge.Select4(false, null))
+                throw new Exception("Could not select stator pressring NDE pocket reference left edge for vertical relation");
+            swModel.SketchAddConstraints("sgVERTICAL");
+            swModel.ClearSelection2(true);
+
+            if (!pocketReferenceTopEdge.Select4(false, null))
                 throw new Exception("Could not select stator pressring NDE pocket reference top edge for construction");
-            selected = swModel.Extension.SelectByID2("", "SKETCHSEGMENT", pocketHalfWidth, pocketCenterY, 0, true, 0, null, 0);
-            if (!selected)
+            if (!pocketReferenceRightEdge.Select4(true, null))
                 throw new Exception("Could not select stator pressring NDE pocket reference right edge for construction");
-            selected = swModel.Extension.SelectByID2("", "SKETCHSEGMENT", 0, pocketCircleBottomCenterY, 0, true, 0, null, 0);
-            if (!selected)
+            if (!pocketReferenceBottomEdge.Select4(true, null))
                 throw new Exception("Could not select stator pressring NDE pocket reference bottom edge for construction");
-            selected = swModel.Extension.SelectByID2("", "SKETCHSEGMENT", -pocketHalfWidth, pocketCenterY, 0, true, 0, null, 0);
-            if (!selected)
+            if (!pocketReferenceLeftEdge.Select4(true, null))
                 throw new Exception("Could not select stator pressring NDE pocket reference left edge for construction");
             swSketchManager.CreateConstructionGeometry();
             swModel.ClearSelection2(true);
 
-            if (swSketchManager.CreateCircleByRadius(-pocketHalfWidth, pocketCircleTopCenterY, 0, pocketCornerRadius) == null
-                || swSketchManager.CreateCircleByRadius(pocketHalfWidth, pocketCircleTopCenterY, 0, pocketCornerRadius) == null
-                || swSketchManager.CreateCircleByRadius(pocketHalfWidth, pocketCircleBottomCenterY, 0, pocketCornerRadius) == null
-                || swSketchManager.CreateCircleByRadius(-pocketHalfWidth, pocketCircleBottomCenterY, 0, pocketCornerRadius) == null)
+            SketchSegment topLeftArcSegment = swSketchManager.CreateArc(
+                -pocketHalfWidth, pocketCircleTopCenterY, 0,
+                -pocketHalfWidth + pocketCornerRadius, pocketCircleTopCenterY, 0,
+                -pocketHalfWidth, pocketCircleTopCenterY - pocketCornerRadius, 0,
+                1) as SketchSegment;
+            SketchSegment topRightArcSegment = swSketchManager.CreateArc(
+                pocketHalfWidth, pocketCircleTopCenterY, 0,
+                pocketHalfWidth - pocketCornerRadius, pocketCircleTopCenterY, 0,
+                pocketHalfWidth, pocketCircleTopCenterY - pocketCornerRadius, 0,
+                -1) as SketchSegment;
+            SketchSegment bottomRightArcSegment = swSketchManager.CreateArc(
+                pocketHalfWidth, pocketCircleBottomCenterY, 0,
+                pocketHalfWidth, pocketCircleBottomCenterY + pocketCornerRadius, 0,
+                pocketHalfWidth - pocketCornerRadius, pocketCircleBottomCenterY, 0,
+                -1) as SketchSegment;
+            SketchSegment bottomLeftArcSegment = swSketchManager.CreateArc(
+                -pocketHalfWidth, pocketCircleBottomCenterY, 0,
+                -pocketHalfWidth + pocketCornerRadius, pocketCircleBottomCenterY, 0,
+                -pocketHalfWidth, pocketCircleBottomCenterY + pocketCornerRadius, 0,
+                -1) as SketchSegment;
+
+            if (topLeftArcSegment == null || topRightArcSegment == null
+                || bottomRightArcSegment == null || bottomLeftArcSegment == null)
             {
-                throw new Exception("Could not create stator pressring NDE pocket corner circles");
+                throw new Exception("Could not create stator pressring NDE pocket corner arcs");
             }
+
+            SketchArc topLeftArc = topLeftArcSegment as SketchArc;
+            SketchArc topRightArc = topRightArcSegment as SketchArc;
+            SketchArc bottomRightArc = bottomRightArcSegment as SketchArc;
+            SketchArc bottomLeftArc = bottomLeftArcSegment as SketchArc;
+            if (topLeftArc == null || topRightArc == null || bottomRightArc == null || bottomLeftArc == null)
+                throw new Exception("Could not access stator pressring NDE pocket arc geometry");
+
+            SketchPoint topLeftArcCenter = topLeftArc.GetCenterPoint2();
+            SketchPoint topRightArcCenter = topRightArc.GetCenterPoint2();
+            SketchPoint bottomRightArcCenter = bottomRightArc.GetCenterPoint2();
+            SketchPoint bottomLeftArcCenter = bottomLeftArc.GetCenterPoint2();
+            if (topLeftArcCenter == null || topRightArcCenter == null
+                || bottomRightArcCenter == null || bottomLeftArcCenter == null)
+                throw new Exception("Could not access stator pressring NDE pocket arc centers");
+
+            swModel.ClearSelection2(true);
+            if (!topLeftArcCenter.Select4(false, null) || !topLeftReferenceCorner.Select4(true, null))
+                throw new Exception("Could not constrain stator pressring NDE top-left arc center");
+            swModel.SketchAddConstraints("sgCOINCIDENT");
+            swModel.ClearSelection2(true);
+
+            if (!topRightArcCenter.Select4(false, null) || !topRightReferenceCorner.Select4(true, null))
+                throw new Exception("Could not constrain stator pressring NDE top-right arc center");
+            swModel.SketchAddConstraints("sgCOINCIDENT");
+            swModel.ClearSelection2(true);
+
+            if (!bottomRightArcCenter.Select4(false, null) || !bottomRightReferenceCorner.Select4(true, null))
+                throw new Exception("Could not constrain stator pressring NDE bottom-right arc center");
+            swModel.SketchAddConstraints("sgCOINCIDENT");
+            swModel.ClearSelection2(true);
+
+            if (!bottomLeftArcCenter.Select4(false, null) || !bottomLeftReferenceCorner.Select4(true, null))
+                throw new Exception("Could not constrain stator pressring NDE bottom-left arc center");
+            swModel.SketchAddConstraints("sgCOINCIDENT");
+            swModel.ClearSelection2(true);
+
+            if (!topLeftArcSegment.Select4(false, null)
+                || !topRightArcSegment.Select4(true, null)
+                || !bottomRightArcSegment.Select4(true, null)
+                || !bottomLeftArcSegment.Select4(true, null))
+            {
+                throw new Exception("Could not select stator pressring NDE pocket arcs for equal relation");
+            }
+            swModel.SketchAddConstraints("sgSAMELENGTH");
+            swModel.ClearSelection2(true);
             SketchSegment topEdge = swSketchManager.CreateLine(
                 -pocketHalfWidth + pocketCornerRadius, pocketCircleTopCenterY, 0,
                 pocketHalfWidth - pocketCornerRadius, pocketCircleTopCenterY, 0) as SketchSegment;
@@ -2506,26 +2824,101 @@ public sealed class Part
             swModel.SketchAddConstraints("sgVERTICAL");
             swModel.ClearSelection2(true);
 
-            swSketchManager.SketchTrim(
-                (int)swSketchTrimChoice_e.swSketchTrimClosest,
-                -pocketHalfWidth + (pocketCornerRadius / 2.0),
-                pocketCircleTopCenterY - (pocketCornerRadius / 2.0),
+            if (!topEdge.Select4(false, null) || !pocketReferenceTopEdge.Select4(true, null))
+                throw new Exception("Could not constrain stator pressring NDE top edge to pocket reference top edge");
+            swModel.SketchAddConstraints("sgCOLINEAR");
+            swModel.ClearSelection2(true);
+
+            if (!bottomEdge.Select4(false, null) || !pocketReferenceBottomEdge.Select4(true, null))
+                throw new Exception("Could not constrain stator pressring NDE bottom edge to pocket reference bottom edge");
+            swModel.SketchAddConstraints("sgCOLINEAR");
+            swModel.ClearSelection2(true);
+
+            if (!rightEdge.Select4(false, null) || !pocketReferenceRightEdge.Select4(true, null))
+                throw new Exception("Could not constrain stator pressring NDE right edge to pocket reference right edge");
+            swModel.SketchAddConstraints("sgCOLINEAR");
+            swModel.ClearSelection2(true);
+
+            if (!leftEdge.Select4(false, null) || !pocketReferenceLeftEdge.Select4(true, null))
+                throw new Exception("Could not constrain stator pressring NDE left edge to pocket reference left edge");
+            swModel.SketchAddConstraints("sgCOLINEAR");
+            swModel.ClearSelection2(true);
+
+            SketchLine topEdgeLine = topEdge as SketchLine;
+            SketchLine rightEdgeLine = rightEdge as SketchLine;
+            SketchLine bottomEdgeLine = bottomEdge as SketchLine;
+            SketchLine leftEdgeLine = leftEdge as SketchLine;
+            if (topEdgeLine == null || rightEdgeLine == null || bottomEdgeLine == null || leftEdgeLine == null)
+                throw new Exception("Could not access stator pressring NDE pocket line geometry");
+
+            SketchPoint topEdgeStart = topEdgeLine.GetStartPoint2();
+            SketchPoint topEdgeEnd = topEdgeLine.GetEndPoint2();
+            SketchPoint rightEdgeStart = rightEdgeLine.GetStartPoint2();
+            SketchPoint rightEdgeEnd = rightEdgeLine.GetEndPoint2();
+            SketchPoint bottomEdgeStart = bottomEdgeLine.GetStartPoint2();
+            SketchPoint bottomEdgeEnd = bottomEdgeLine.GetEndPoint2();
+            SketchPoint leftEdgeStart = leftEdgeLine.GetStartPoint2();
+            SketchPoint leftEdgeEnd = leftEdgeLine.GetEndPoint2();
+            if (topEdgeStart == null || topEdgeEnd == null || rightEdgeStart == null || rightEdgeEnd == null
+                || bottomEdgeStart == null || bottomEdgeEnd == null || leftEdgeStart == null || leftEdgeEnd == null)
+            {
+                throw new Exception("Could not access stator pressring NDE pocket line endpoints");
+            }
+
+            swModel.ClearSelection2(true);
+            if (!topEdgeStart.Select4(false, null) || !topLeftArcSegment.Select4(true, null))
+                throw new Exception("Could not constrain stator pressring NDE top edge start to top-left arc");
+            swModel.SketchAddConstraints("sgCOINCIDENT");
+            swModel.ClearSelection2(true);
+
+            if (!topEdgeEnd.Select4(false, null) || !topRightArcSegment.Select4(true, null))
+                throw new Exception("Could not constrain stator pressring NDE top edge end to top-right arc");
+            swModel.SketchAddConstraints("sgCOINCIDENT");
+            swModel.ClearSelection2(true);
+
+            if (!rightEdgeStart.Select4(false, null) || !topRightArcSegment.Select4(true, null))
+                throw new Exception("Could not constrain stator pressring NDE right edge start to top-right arc");
+            swModel.SketchAddConstraints("sgCOINCIDENT");
+            swModel.ClearSelection2(true);
+
+            if (!rightEdgeEnd.Select4(false, null) || !bottomRightArcSegment.Select4(true, null))
+                throw new Exception("Could not constrain stator pressring NDE right edge end to bottom-right arc");
+            swModel.SketchAddConstraints("sgCOINCIDENT");
+            swModel.ClearSelection2(true);
+
+            if (!bottomEdgeStart.Select4(false, null) || !bottomRightArcSegment.Select4(true, null))
+                throw new Exception("Could not constrain stator pressring NDE bottom edge start to bottom-right arc");
+            swModel.SketchAddConstraints("sgCOINCIDENT");
+            swModel.ClearSelection2(true);
+
+            if (!bottomEdgeEnd.Select4(false, null) || !bottomLeftArcSegment.Select4(true, null))
+                throw new Exception("Could not constrain stator pressring NDE bottom edge end to bottom-left arc");
+            swModel.SketchAddConstraints("sgCOINCIDENT");
+            swModel.ClearSelection2(true);
+
+            if (!leftEdgeStart.Select4(false, null) || !bottomLeftArcSegment.Select4(true, null))
+                throw new Exception("Could not constrain stator pressring NDE left edge start to bottom-left arc");
+            swModel.SketchAddConstraints("sgCOINCIDENT");
+            swModel.ClearSelection2(true);
+
+            if (!leftEdgeEnd.Select4(false, null) || !topLeftArcSegment.Select4(true, null))
+                throw new Exception("Could not constrain stator pressring NDE left edge end to top-left arc");
+            swModel.SketchAddConstraints("sgCOINCIDENT");
+            swModel.ClearSelection2(true);
+
+            if (!topLeftArcCenter.Select4(false, null) || !topEdgeStart.Select4(true, null))
+                throw new Exception("Could not select stator pressring NDE top-left arc center and top edge start for radius dimension");
+            displayDim = (DisplayDimension)swModel.AddHorizontalDimension2(
+                -pocketHalfWidth - Mm(20),
+                pocketCircleTopCenterY + Mm(20),
                 0);
-            swSketchManager.SketchTrim(
-                (int)swSketchTrimChoice_e.swSketchTrimClosest,
-                pocketHalfWidth - (pocketCornerRadius / 2.0),
-                pocketCircleTopCenterY - (pocketCornerRadius / 2.0),
-                0);
-            swSketchManager.SketchTrim(
-                (int)swSketchTrimChoice_e.swSketchTrimClosest,
-                pocketHalfWidth - (pocketCornerRadius / 2.0),
-                pocketCircleBottomCenterY + (pocketCornerRadius / 2.0),
-                0);
-            swSketchManager.SketchTrim(
-                (int)swSketchTrimChoice_e.swSketchTrimClosest,
-                -pocketHalfWidth + (pocketCornerRadius / 2.0),
-                pocketCircleBottomCenterY + (pocketCornerRadius / 2.0),
-                0);
+            if (displayDim == null)
+                throw new Exception("Could not create stator pressring NDE pocket arc radius-driving dimension");
+            swDim = displayDim.GetDimension();
+            if (swDim == null)
+                throw new Exception("Could not access stator pressring NDE pocket arc radius-driving dimension");
+            swDim.SystemValue = pocketCornerRadius;
+            swModel.ClearSelection2(true);
 
             swSketchManager.InsertSketch(true);
 
@@ -2572,7 +2965,7 @@ public sealed class Part
                 0);
             if (!selected)
                 throw new Exception("Could not select stator pressring NDE top face for inner press ring");
-
+            _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, true);
             swSketchManager.InsertSketch(true);
             swSketchManager.CreateCircleByRadius(0, 0, 0, pressRingOuterRadius);
             swSketchManager.CreateCircleByRadius(0, 0, 0, innerRadius);
@@ -2614,9 +3007,6 @@ public sealed class Part
             if (innerPressRingFeature == null)
                 throw new Exception("Failed to create stator pressring NDE inner press ring");
 
-            swModel.ClearSelection2(true);
-            swModel.ShowNamedView2("*Front", (int)swStandardViews_e.swFrontView);
-            swModel.ViewZoomtofit2();
 
             string savedPath;
             if (SaveToPdm)
