@@ -21,7 +21,7 @@ public static class Program
     var assembly = new Assembly(swApp, pdm);
 
     //pdm.Login(); 
-    string outFolder = @"60_Tests\665_Test_Kareem";
+    //string outFolder = @"60_Tests\665_Test_Kareem";
     string localoutFolder = @"C:\Users\kareem.salah\Downloads\birr machines\birr machines\parts";
     Project1.Run3(localoutFolder, myPart, assembly);
     //myPart.Create_stator_sheet(outFolder);

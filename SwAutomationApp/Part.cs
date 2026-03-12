@@ -1714,7 +1714,7 @@ public sealed class Part
         }
     }
 
-    public string Create_torsion_bar(string outFolder, bool closeAfterCreate = false, bool SaveToPdm = false)
+    public string Create_tension_bar(string outFolder, bool closeAfterCreate = false, bool SaveToPdm = false)
     {
         double Mm(double mm) => mm * MmToMeters;
         using var automationUi = BeginAutomationUiSuppression();
@@ -1991,7 +1991,8 @@ public sealed class Part
         // Main dimensions (mm) - change these only.
         double outerDiameterMm = 990.0;
         double ringInnerDiameterMm = 840.0;
-        double plateInnerReferenceDiameterMm = 660.0;
+        double plateOuterInsetFromOuterDiameterMm = 5.0;
+        double plateRadialLengthMm = 165.0;
         double ringThicknessMm = 2.0;
         double plateBodyThicknessMm = 10.0;
         double plateWidthMm = 6.0;
@@ -2000,14 +2001,15 @@ public sealed class Part
         // Derived dimensions (m)
         double outerRadius = Mm(outerDiameterMm / 2.0);
         double ringInnerRadius = Mm(ringInnerDiameterMm / 2.0);
-        double plateInnerRadius = Mm(plateInnerReferenceDiameterMm / 2.0);
+        double plateOuterInsetFromOuterDiameter = Mm(plateOuterInsetFromOuterDiameterMm);
+        double plateRadialLength = Mm(plateRadialLengthMm);
         double ringThickness = Mm(ringThicknessMm);
         double plateBodyThickness = Mm(plateBodyThicknessMm);
         double plateHalfWidth = Mm(plateWidthMm / 2.0);
-        double plateOuterY = outerRadius;
-        double plateInnerY = plateInnerRadius;
+        double plateOuterY = outerRadius - plateOuterInsetFromOuterDiameter;
+        double plateInnerY = plateOuterY - plateRadialLength;
         double plateCenterY = (plateOuterY + plateInnerY) / 2.0;
-        double plateHeight = plateOuterY - plateInnerY;
+        double plateHeight = plateRadialLength;
 
         ModelDoc2 swModel = null;
         SketchManager swSketchManager = null;
@@ -2180,7 +2182,7 @@ public sealed class Part
             if (displayDim == null) throw new Exception("Could not create press-plate body top offset dimension");
             swDim = displayDim.GetDimension();
             if (swDim == null) throw new Exception("Could not access press-plate body top offset dimension");
-            swDim.SystemValue = outerRadius;
+            swDim.SystemValue = plateOuterY;
             swModel.ClearSelection2(true);
 
             swSketchManager.InsertSketch(true);
@@ -2244,6 +2246,398 @@ public sealed class Part
             }
 
             _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, pressPlateSketchInferenceWasEnabled);
+            Console.WriteLine("Done!");
+            return Path.GetFileName(savedPath);
+        }
+        catch (Exception ex)
+        {
+            try { _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, true); } catch { }
+            Console.WriteLine("Fatal error: " + ex);
+            return null;
+        }
+    }
+
+    public string Create_stator_pressring_nde(string outFolder, bool closeAfterCreate = false, bool SaveToPdm = false)
+    {
+        double Mm(double mm) => mm * MmToMeters;
+        using var automationUi = BeginAutomationUiSuppression();
+        bool SelectSketchByIndex(ModelDoc2 model, int index)
+        {
+            return model.Extension.SelectByID2($"Skizze{index}", "SKETCH", 0, 0, 0, false, 0, null, 0)
+                || model.Extension.SelectByID2($"Sketch{index}", "SKETCH", 0, 0, 0, false, 0, null, 0);
+        }
+
+        // Main dimensions (mm) - change these only.
+        double outerDiameterMm = 1090.0;
+        double innerDiameterMm = 840.0;
+        double pressRingOuterDiameterMm = 870.0;
+        double ringThicknessMm = 30.0;
+        double pressRingThicknessMm = 10.0;
+        double pocketCenterRadiusMm = 493.0;
+        double pocketWidthMm = 36.0;
+        double pocketHeightMm = 43.0;
+        double pocketCornerRadiusMm = 5.0;
+        int pocketCount = 8;
+
+        // Derived dimensions (m)
+        double outerRadius = Mm(outerDiameterMm / 2.0);
+        double innerRadius = Mm(innerDiameterMm / 2.0);
+        double pressRingOuterRadius = Mm(pressRingOuterDiameterMm / 2.0);
+        double ringThickness = Mm(ringThicknessMm);
+        double pressRingThickness = Mm(pressRingThicknessMm);
+        double pocketCenterY = Mm(pocketCenterRadiusMm);
+        double pocketCornerRadius = Mm(pocketCornerRadiusMm);
+        double pocketHalfWidth = Mm(pocketWidthMm / 2.0);
+        double pocketHalfHeight = Mm(pocketHeightMm / 2.0);
+        double pocketCircleTopCenterY = pocketCenterY + pocketHalfHeight;
+        double pocketCircleBottomCenterY = pocketCenterY - pocketHalfHeight;
+
+        ModelDoc2 swModel = null;
+        SketchManager swSketchManager = null;
+
+        try
+        {
+            Dimension swDim = null;
+            DisplayDimension displayDim = null;
+            bool sketchInferenceWasEnabled = _swApp.GetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference);
+
+            Feature CreatePocketCut(bool reverseDirection)
+            {
+                swModel.ClearSelection2(true);
+                if (!SelectSketchByIndex(swModel, 2))
+                    throw new Exception("Could not select stator pressring NDE pocket sketch");
+
+                return swModel.FeatureManager.FeatureCut4(
+                    true, false, reverseDirection,
+                    (int)swEndConditions_e.swEndCondThroughAll, 0,
+                    0, 0,
+                    false, false, false, false,
+                    0, 0, false, false, false, false,
+                    false, true, true, true, true, false,
+                    0, 0, false, false);
+            }
+
+            if (!Directory.Exists(outFolder))
+                Directory.CreateDirectory(outFolder);
+
+            string template = _swApp.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplatePart);
+            swModel = (ModelDoc2)_swApp.NewDocument(template, 0, 0, 0);
+            if (swModel == null)
+                throw new Exception("Failed to create new part");
+
+            swSketchManager = swModel.SketchManager;
+
+            PartDoc pressRingPart = swModel as PartDoc;
+            pressRingPart?.SetMaterialPropertyName2("", "", Name: "AISI 1020");
+
+            bool selected = swModel.Extension.SelectByID2("Ebene vorne", "PLANE", 0, 0, 0, false, 0, null, 0);
+            if (!selected)
+                throw new Exception("Could not select Front Plane for stator pressring NDE");
+
+            swSketchManager.InsertSketch(true);
+            swSketchManager.CreateCircleByRadius(0, 0, 0, outerRadius);
+            swSketchManager.CreateCircleByRadius(0, 0, 0, innerRadius);
+
+            _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, false);
+
+            swModel.ClearSelection2(true);
+            selected = swModel.Extension.SelectByID2("", "SKETCHSEGMENT", outerRadius, 0, 0, false, 0, null, 0);
+            if (!selected)
+                throw new Exception("Could not select stator pressring NDE outer circle");
+            displayDim = (DisplayDimension)swModel.AddDimension2(outerRadius + Mm(20), Mm(20), 0);
+            if (displayDim == null)
+                throw new Exception("Could not create stator pressring NDE outer diameter dimension");
+            swDim = displayDim.GetDimension();
+            if (swDim == null)
+                throw new Exception("Could not access stator pressring NDE outer diameter dimension");
+            swDim.SystemValue = Mm(outerDiameterMm);
+
+            swModel.ClearSelection2(true);
+            selected = swModel.Extension.SelectByID2("", "SKETCHSEGMENT", innerRadius, 0, 0, false, 0, null, 0);
+            if (!selected)
+                throw new Exception("Could not select stator pressring NDE inner circle");
+            displayDim = (DisplayDimension)swModel.AddDimension2(innerRadius + Mm(20), Mm(20), 0);
+            if (displayDim == null)
+                throw new Exception("Could not create stator pressring NDE inner diameter dimension");
+            swDim = displayDim.GetDimension();
+            if (swDim == null)
+                throw new Exception("Could not access stator pressring NDE inner diameter dimension");
+            swDim.SystemValue = Mm(innerDiameterMm);
+
+            swModel.ClearSelection2(true);
+            if (!SelectSketchByIndex(swModel, 1))
+                throw new Exception("Could not select stator pressring NDE base sketch");
+            Feature baseRingFeature = swModel.FeatureManager.FeatureExtrusion2(
+                true, false, false,
+                (int)swEndConditions_e.swEndCondBlind, 0,
+                ringThickness, 0,
+                false, false, false, false,
+                0, 0, false, false, false, false,
+                true, true, true, 0, 0, false);
+            if (baseRingFeature == null)
+                throw new Exception("Failed to create stator pressring NDE base ring");
+
+            swModel.ClearSelection2(true);
+            selected = swModel.Extension.SelectByID2(
+                "",
+                "FACE",
+                (outerRadius + innerRadius) / 2.0,
+                0,
+                ringThickness,
+                false,
+                0,
+                null,
+                0);
+            if (!selected)
+                throw new Exception("Could not select stator pressring NDE top face for pocket");
+
+            swSketchManager.InsertSketch(true);
+            swSketchManager.CreateCenterRectangle(0, pocketCenterY, 0, pocketHalfWidth, pocketCircleTopCenterY, 0);
+
+            swModel.ClearSelection2(true);
+            selected = swModel.Extension.SelectByID2("", "SKETCHSEGMENT", 0, pocketCircleTopCenterY, 0, false, 0, null, 0);
+            if (!selected)
+                throw new Exception("Could not select stator pressring NDE pocket reference top edge");
+            displayDim = (DisplayDimension)swModel.AddHorizontalDimension2(0, pocketCircleTopCenterY + Mm(15), 0);
+            if (displayDim == null)
+                throw new Exception("Could not create stator pressring NDE pocket width dimension");
+            swDim = displayDim.GetDimension();
+            if (swDim == null)
+                throw new Exception("Could not access stator pressring NDE pocket width dimension");
+            swDim.SystemValue = pocketHalfWidth * 2.0;
+            swModel.ClearSelection2(true);
+
+            selected = swModel.Extension.SelectByID2("", "SKETCHPOINT", pocketHalfWidth, pocketCircleBottomCenterY, 0, false, 0, null, 0);
+            if (!selected)
+                throw new Exception("Could not select stator pressring NDE pocket reference bottom-right point");
+            selected = swModel.Extension.SelectByID2("", "SKETCHPOINT", pocketHalfWidth, pocketCircleTopCenterY, 0, true, 0, null, 0);
+            if (!selected)
+                throw new Exception("Could not select stator pressring NDE pocket reference top-right point");
+            displayDim = (DisplayDimension)swModel.AddVerticalDimension2(pocketHalfWidth + Mm(25), pocketCenterY, 0);
+            if (displayDim == null)
+                throw new Exception("Could not create stator pressring NDE pocket height dimension");
+            swDim = displayDim.GetDimension();
+            if (swDim == null)
+                throw new Exception("Could not access stator pressring NDE pocket height dimension");
+            swDim.SystemValue = pocketHalfHeight * 2.0;
+            swModel.ClearSelection2(true);
+
+            selected = swModel.Extension.SelectByID2("", "SKETCHPOINT", 0, pocketCenterY, 0, false, 0, null, 0);
+            if (!selected)
+                throw new Exception("Could not select stator pressring NDE pocket reference center point");
+            selected = swModel.Extension.SelectByID2("", "EXTSKETCHPOINT", 0, 0, 0, true, 0, null, 0);
+            if (!selected)
+                throw new Exception("Could not select sketch origin for stator pressring NDE pocket alignment");
+            swModel.SketchAddConstraints("sgVERTICALPOINTS2D");
+            swModel.ClearSelection2(true);
+
+            selected = swModel.Extension.SelectByID2("", "SKETCHPOINT", 0, pocketCenterY, 0, false, 0, null, 0);
+            if (!selected)
+                throw new Exception("Could not reselect stator pressring NDE pocket reference center point");
+            selected = swModel.Extension.SelectByID2("", "EXTSKETCHPOINT", 0, 0, 0, true, 0, null, 0);
+            if (!selected)
+                throw new Exception("Could not select sketch origin for stator pressring NDE pocket location");
+            displayDim = (DisplayDimension)swModel.AddVerticalDimension2(-Mm(40), pocketCenterY / 2.0, 0);
+            if (displayDim == null)
+                throw new Exception("Could not create stator pressring NDE pocket center radius dimension");
+            swDim = displayDim.GetDimension();
+            if (swDim == null)
+                throw new Exception("Could not access stator pressring NDE pocket center radius dimension");
+            swDim.SystemValue = pocketCenterY;
+            swModel.ClearSelection2(true);
+
+            selected = swModel.Extension.SelectByID2("", "SKETCHSEGMENT", 0, pocketCircleTopCenterY, 0, false, 0, null, 0);
+            if (!selected)
+                throw new Exception("Could not select stator pressring NDE pocket reference top edge for construction");
+            selected = swModel.Extension.SelectByID2("", "SKETCHSEGMENT", pocketHalfWidth, pocketCenterY, 0, true, 0, null, 0);
+            if (!selected)
+                throw new Exception("Could not select stator pressring NDE pocket reference right edge for construction");
+            selected = swModel.Extension.SelectByID2("", "SKETCHSEGMENT", 0, pocketCircleBottomCenterY, 0, true, 0, null, 0);
+            if (!selected)
+                throw new Exception("Could not select stator pressring NDE pocket reference bottom edge for construction");
+            selected = swModel.Extension.SelectByID2("", "SKETCHSEGMENT", -pocketHalfWidth, pocketCenterY, 0, true, 0, null, 0);
+            if (!selected)
+                throw new Exception("Could not select stator pressring NDE pocket reference left edge for construction");
+            swSketchManager.CreateConstructionGeometry();
+            swModel.ClearSelection2(true);
+
+            if (swSketchManager.CreateCircleByRadius(-pocketHalfWidth, pocketCircleTopCenterY, 0, pocketCornerRadius) == null
+                || swSketchManager.CreateCircleByRadius(pocketHalfWidth, pocketCircleTopCenterY, 0, pocketCornerRadius) == null
+                || swSketchManager.CreateCircleByRadius(pocketHalfWidth, pocketCircleBottomCenterY, 0, pocketCornerRadius) == null
+                || swSketchManager.CreateCircleByRadius(-pocketHalfWidth, pocketCircleBottomCenterY, 0, pocketCornerRadius) == null)
+            {
+                throw new Exception("Could not create stator pressring NDE pocket corner circles");
+            }
+            SketchSegment topEdge = swSketchManager.CreateLine(
+                -pocketHalfWidth + pocketCornerRadius, pocketCircleTopCenterY, 0,
+                pocketHalfWidth - pocketCornerRadius, pocketCircleTopCenterY, 0) as SketchSegment;
+            SketchSegment rightEdge = swSketchManager.CreateLine(
+                pocketHalfWidth, pocketCircleTopCenterY - pocketCornerRadius, 0,
+                pocketHalfWidth, pocketCircleBottomCenterY + pocketCornerRadius, 0) as SketchSegment;
+            SketchSegment bottomEdge = swSketchManager.CreateLine(
+                pocketHalfWidth - pocketCornerRadius, pocketCircleBottomCenterY, 0,
+                -pocketHalfWidth + pocketCornerRadius, pocketCircleBottomCenterY, 0) as SketchSegment;
+            SketchSegment leftEdge = swSketchManager.CreateLine(
+                -pocketHalfWidth, pocketCircleBottomCenterY + pocketCornerRadius, 0,
+                -pocketHalfWidth, pocketCircleTopCenterY - pocketCornerRadius, 0) as SketchSegment;
+
+            if (topEdge == null || rightEdge == null || bottomEdge == null || leftEdge == null)
+            {
+                throw new Exception("Could not create stator pressring NDE pocket circle-line profile");
+            }
+
+            if (!topEdge.Select4(false, null))
+                throw new Exception("Could not select stator pressring NDE top edge");
+            swModel.SketchAddConstraints("sgHORIZONTAL");
+            swModel.ClearSelection2(true);
+
+            if (!bottomEdge.Select4(false, null))
+                throw new Exception("Could not select stator pressring NDE bottom edge");
+            swModel.SketchAddConstraints("sgHORIZONTAL");
+            swModel.ClearSelection2(true);
+
+            if (!rightEdge.Select4(false, null))
+                throw new Exception("Could not select stator pressring NDE right edge");
+            swModel.SketchAddConstraints("sgVERTICAL");
+            swModel.ClearSelection2(true);
+
+            if (!leftEdge.Select4(false, null))
+                throw new Exception("Could not select stator pressring NDE left edge");
+            swModel.SketchAddConstraints("sgVERTICAL");
+            swModel.ClearSelection2(true);
+
+            swSketchManager.SketchTrim(
+                (int)swSketchTrimChoice_e.swSketchTrimClosest,
+                -pocketHalfWidth + (pocketCornerRadius / 2.0),
+                pocketCircleTopCenterY - (pocketCornerRadius / 2.0),
+                0);
+            swSketchManager.SketchTrim(
+                (int)swSketchTrimChoice_e.swSketchTrimClosest,
+                pocketHalfWidth - (pocketCornerRadius / 2.0),
+                pocketCircleTopCenterY - (pocketCornerRadius / 2.0),
+                0);
+            swSketchManager.SketchTrim(
+                (int)swSketchTrimChoice_e.swSketchTrimClosest,
+                pocketHalfWidth - (pocketCornerRadius / 2.0),
+                pocketCircleBottomCenterY + (pocketCornerRadius / 2.0),
+                0);
+            swSketchManager.SketchTrim(
+                (int)swSketchTrimChoice_e.swSketchTrimClosest,
+                -pocketHalfWidth + (pocketCornerRadius / 2.0),
+                pocketCircleBottomCenterY + (pocketCornerRadius / 2.0),
+                0);
+
+            swSketchManager.InsertSketch(true);
+
+            Feature pocketCutFeature = CreatePocketCut(false);
+            if (pocketCutFeature == null)
+                pocketCutFeature = CreatePocketCut(true);
+            if (pocketCutFeature == null)
+                throw new Exception("Failed to create stator pressring NDE pocket cut");
+
+            swModel.ClearSelection2(true);
+            selected = swModel.Extension.SelectByID2("Z-Achse", "AXIS", 0, 0, 0, false, 1, null, 0);
+            if (!selected)
+                throw new Exception("Could not select Z axis for stator pressring NDE pocket pattern");
+            if (!pocketCutFeature.Select2(true, 4))
+                throw new Exception("Could not select stator pressring NDE pocket cut feature for circular pattern");
+            Feature pocketPatternFeature = (Feature)swModel.FeatureManager.FeatureCircularPattern5(
+                pocketCount,
+                2 * Math.PI,
+                false,
+                "",
+                true,
+                true,
+                false,
+                true,
+                false,
+                false,
+                0,
+                0.0,
+                "",
+                false);
+            if (pocketPatternFeature == null)
+                throw new Exception("Failed to create stator pressring NDE pocket circular pattern");
+
+            swModel.ClearSelection2(true);
+            selected = swModel.Extension.SelectByID2(
+                "",
+                "FACE",
+                (pressRingOuterRadius + innerRadius) / 2.0,
+                0,
+                ringThickness,
+                false,
+                0,
+                null,
+                0);
+            if (!selected)
+                throw new Exception("Could not select stator pressring NDE top face for inner press ring");
+
+            swSketchManager.InsertSketch(true);
+            swSketchManager.CreateCircleByRadius(0, 0, 0, pressRingOuterRadius);
+            swSketchManager.CreateCircleByRadius(0, 0, 0, innerRadius);
+
+            swModel.ClearSelection2(true);
+            selected = swModel.Extension.SelectByID2("", "SKETCHSEGMENT", pressRingOuterRadius, 0, 0, false, 0, null, 0);
+            if (!selected)
+                throw new Exception("Could not select stator pressring NDE inner press ring outer circle");
+            displayDim = (DisplayDimension)swModel.AddDimension2(pressRingOuterRadius + Mm(20), Mm(30), 0);
+            if (displayDim == null)
+                throw new Exception("Could not create stator pressring NDE inner press ring outer diameter dimension");
+            swDim = displayDim.GetDimension();
+            if (swDim == null)
+                throw new Exception("Could not access stator pressring NDE inner press ring outer diameter dimension");
+            swDim.SystemValue = Mm(pressRingOuterDiameterMm);
+
+            swModel.ClearSelection2(true);
+            selected = swModel.Extension.SelectByID2("", "SKETCHSEGMENT", innerRadius, 0, 0, false, 0, null, 0);
+            if (!selected)
+                throw new Exception("Could not select stator pressring NDE inner press ring inner circle");
+            displayDim = (DisplayDimension)swModel.AddDimension2(innerRadius + Mm(20), -Mm(30), 0);
+            if (displayDim == null)
+                throw new Exception("Could not create stator pressring NDE inner press ring inner diameter dimension");
+            swDim = displayDim.GetDimension();
+            if (swDim == null)
+                throw new Exception("Could not access stator pressring NDE inner press ring inner diameter dimension");
+            swDim.SystemValue = Mm(innerDiameterMm);
+
+            swSketchManager.InsertSketch(true);
+            if (!SelectSketchByIndex(swModel, 3))
+                throw new Exception("Could not select stator pressring NDE inner press ring sketch");
+            Feature innerPressRingFeature = swModel.FeatureManager.FeatureExtrusion2(
+                true, true, false,
+                (int)swEndConditions_e.swEndCondBlind, 0,
+                pressRingThickness, 0,
+                false, false, false, false,
+                0, 0, false, false, false, false,
+                true, true, true, 0, 0, false);
+            if (innerPressRingFeature == null)
+                throw new Exception("Failed to create stator pressring NDE inner press ring");
+
+            swModel.ClearSelection2(true);
+            swModel.ShowNamedView2("*Front", (int)swStandardViews_e.swFrontView);
+            swModel.ViewZoomtofit2();
+
+            string savedPath;
+            if (SaveToPdm)
+            {
+                savedPath = _pdm.SaveAsPdm(swModel, outFolder);
+                Console.WriteLine($"Part saved to PDM: {savedPath}");
+            }
+            else
+            {
+                savedPath = Path.Combine(outFolder, "StatorPressringNDE.SLDPRT");
+                swModel.SaveAs3(savedPath, 0, 1);
+                Console.WriteLine($"Part saved locally: {savedPath}");
+            }
+
+            if (closeAfterCreate)
+            {
+                _swApp.CloseDoc(swModel.GetTitle());
+                Console.WriteLine("Part closed after creating.");
+            }
+
+            _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, sketchInferenceWasEnabled);
             Console.WriteLine("Done!");
             return Path.GetFileName(savedPath);
         }
