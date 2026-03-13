@@ -67,7 +67,7 @@ public sealed class Part
         // Main dimensions (mm) - change these only.
         double outerDiameterMm = 990.0;
         double innerDiameterMm = 640.0;
-        double plateThicknessMm = 8.0;
+        double plateThicknessMm = 100.0;
         double slotWidthMm = 15.7;
         double slotBottomYmm = 320.0;
         double slotTopYmm = 405.2;
@@ -1421,7 +1421,7 @@ public sealed class Part
             }
             else
             {
-                savedPath = Path.Combine(outFolder, "StatorDistanceBleche.SLDPRT");
+                savedPath = Path.Combine(outFolder, "StatorEndBleche.SLDPRT");
                 swModel.SaveAs3(savedPath, 0, 1);
                 Console.WriteLine($"Part saved locally: {savedPath}");
             }
@@ -2269,16 +2269,16 @@ public sealed class Part
         }
 
         // Main dimensions (mm) - change these only.
-        double outerDiameterMm = 1090.0;
+        double outerDiameterMm = 1100;
         double innerDiameterMm = 840.0;
-        double pressRingOuterDiameterMm = 870.0;
+        double pressRingOuterDiameterMm = 860.0;
         double ringThicknessMm = 28.0;
         double pressRingThicknessMm = 2.0;
         double baseInnerChamferDistanceMm = 20.0;
         double baseInnerChamferAngleDeg = 30.0;
-        double pocketCenterRadiusMm = 493.0;
-        double pocketWidthMm = 36.0;
-        double pocketHeightMm = 43.0;
+        double pocketCenterRadiusMm = 520;
+        double pocketWidthMm = 43.0;
+        double pocketHeightMm = 36.0;
         double pocketCornerRadiusMm = 5.0;
         int pocketCount = 8;
 
@@ -3038,4 +3038,5 @@ public sealed class Part
             return null;
         }
     }
+
 }

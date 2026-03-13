@@ -236,7 +236,7 @@ public void mate_plans(Component2 insertedComponent)
 
     _model.EditRebuild3();
 }
-public void ApplyCoincedentMate(Component2 comp1, string ref1, Component2 comp2, string ref2, double offset = 0)
+public void ApplyCoincedentMate(Component2 comp1, string ref1, Component2 comp2, string ref2, double offset = 0, bool flipAlignment = false)
 {
     if (_model == null || _assembly == null)
         throw new InvalidOperationException("No open assembly.");
@@ -270,8 +270,8 @@ public void ApplyCoincedentMate(Component2 comp1, string ref1, Component2 comp2,
         // Type, Alignment, Flip, Distance, Max, Min, etc.
         _assembly.AddMate5(
             (int)mateType,
-            (int)swMateAlign_e.swMateAlignALIGNED,
-            false,  // Flip Alignment
+            flipAlignment ? (int)swMateAlign_e.swMateAlignANTI_ALIGNED : (int)swMateAlign_e.swMateAlignALIGNED,
+            flipAlignment,
             offset, // Distance/Offset
             offset, // Max Distance
             offset, // Min Distance
@@ -287,6 +287,49 @@ public void ApplyCoincedentMate(Component2 comp1, string ref1, Component2 comp2,
     else
     {
         Console.WriteLine($"Selection failed for {selection1} or {selection2}");
+    }
+
+    _model.EditRebuild3();
+}
+public void ApplyAngleMate(Component2 comp1, string ref1, Component2 comp2, string ref2, double angleDeg, bool flipAlignment = false)
+{
+    if (_model == null || _assembly == null)
+        throw new InvalidOperationException("No open assembly.");
+
+    string asmName = _model.GetTitle().Split('.')[0];
+    string selection1 = (comp1 != null) ? $"{ref1}@{comp1.Name2}@{asmName}" : ref1;
+    string selection2 = (comp2 != null) ? $"{ref2}@{comp2.Name2}@{asmName}" : ref2;
+
+    ModelDocExtension swExt = _model.Extension;
+    _model.ClearSelection2(true);
+
+    bool s1 = SelectReferenceGeneric(swExt, comp1, ref1, selection1, false);
+    bool s2 = SelectReferenceGeneric(swExt, comp2, ref2, selection2, true);
+
+    if (s1 && s2)
+    {
+        int mateError = 0;
+        double angleRadians = angleDeg * Math.PI / 180.0;
+
+        _assembly.AddMate5(
+            (int)swMateType_e.swMateANGLE,
+            flipAlignment ? (int)swMateAlign_e.swMateAlignANTI_ALIGNED : (int)swMateAlign_e.swMateAlignALIGNED,
+            flipAlignment,
+            0.0,
+            0.0,
+            0.0,
+            0.0, 0.0, angleRadians, angleRadians, angleRadians,
+            false,
+            false,
+            0,
+            out mateError);
+
+        if (mateError > 1)
+            Console.WriteLine($"Angle mate failed with error code: {mateError}");
+    }
+    else
+    {
+        Console.WriteLine($"Selection failed for angle mate: {selection1} or {selection2}");
     }
 
     _model.EditRebuild3();
@@ -345,6 +388,232 @@ public void ApplyCoincedentAxisMate(Component2 comp1, Component2 comp2)
     foreach (string axis in axes)
     {
         ApplyCoincedentMate(comp1, axis, comp2, axis);
+    }
+}
+
+public Feature CreateLinearComponentPattern(Component2 directionOwner, string directionRef, int instanceCount, double spacing, params Component2[] seedComponents)
+{
+    if (_model == null || _assembly == null)
+        throw new InvalidOperationException("No open assembly.");
+
+    if (seedComponents == null || seedComponents.Length == 0)
+        throw new ArgumentException("At least one seed component is required.", nameof(seedComponents));
+
+    if (instanceCount < 2)
+        throw new ArgumentOutOfRangeException(nameof(instanceCount), "Linear pattern count must be at least 2.");
+
+    string asmName = _model.GetTitle().Split('.')[0];
+    string directionSelection = (directionOwner != null) ? $"{directionRef}@{directionOwner.Name2}@{asmName}" : directionRef;
+    ModelDocExtension swExt = _model.Extension;
+    SelectionMgr selectionMgr = _model.SelectionManager as SelectionMgr;
+    if (selectionMgr == null)
+        throw new Exception("Could not access selection manager for linear component pattern");
+
+    foreach (int directionMark in new[] { 2, 1, 4, 256 })
+    {
+        foreach (int componentMark in new[] { 1, 4, 256, 2 })
+        {
+            foreach (bool directionFirst in new[] { true, false })
+            {
+                SelectData directionSelectData = selectionMgr.CreateSelectData();
+                SelectData componentSelectData = selectionMgr.CreateSelectData();
+                if (directionSelectData == null || componentSelectData == null)
+                    continue;
+
+                directionSelectData.Mark = directionMark;
+                componentSelectData.Mark = componentMark;
+
+                _model.ClearSelection2(true);
+
+                bool directionSelected;
+                int selectedSeedCount;
+
+                if (directionFirst)
+                {
+                    directionSelected = SelectPatternDirection(false, directionSelectData);
+                    selectedSeedCount = SelectSeedComponents(true, componentSelectData);
+                }
+                else
+                {
+                    selectedSeedCount = SelectSeedComponents(false, componentSelectData);
+                    directionSelected = SelectPatternDirection(true, directionSelectData);
+                }
+
+                if (!directionSelected || selectedSeedCount != seedComponents.Length)
+                    continue;
+
+                Feature patternFeature = _model.FeatureManager.FeatureLinearPattern5(
+                    instanceCount,
+                    spacing,
+                    1,
+                    0.0,
+                    false,
+                    false,
+                    string.Empty,
+                    string.Empty,
+                    false,
+                    false,
+                    false,
+                    false,
+                    true,
+                    true,
+                    false,
+                    false,
+                    false,
+                    false,
+                    0.0,
+                    0.0,
+                    false,
+                    false) as Feature;
+
+                if (patternFeature != null)
+                {
+                    _model.EditRebuild3();
+                    return patternFeature;
+                }
+            }
+        }
+    }
+
+    throw new Exception("Failed to create linear component pattern");
+
+    bool SelectPatternDirection(bool append, SelectData directionSelectData)
+    {
+        if (directionOwner != null && !IsPlaneReference(directionRef) && !IsAxisReference(directionRef))
+        {
+            PartDoc partDoc = directionOwner.GetModelDoc2() as PartDoc;
+            Entity faceInPart = partDoc?.GetEntityByName(directionRef, (int)swSelectType_e.swSelFACES) as Entity;
+            Entity faceInAssembly = (faceInPart != null) ? directionOwner.GetCorrespondingEntity(faceInPart) as Entity : null;
+            return faceInAssembly != null && faceInAssembly.Select4(append, directionSelectData);
+        }
+
+        string selType = IsPlaneReference(directionRef) ? "PLANE" : (IsAxisReference(directionRef) ? "AXIS" : "FACE");
+        return swExt.SelectByID2(directionSelection, selType, 0, 0, 0, append, directionSelectData.Mark, null, 0);
+    }
+
+    int SelectSeedComponents(bool appendFirst, SelectData componentSelectData)
+    {
+        int count = 0;
+        bool append = appendFirst;
+        foreach (Component2 seedComponent in seedComponents)
+        {
+            if (seedComponent != null && seedComponent.Select4(append, componentSelectData, false))
+            {
+                count++;
+                append = true;
+            }
+        }
+
+        return count;
+    }
+}
+
+public Feature CreateCircularComponentPattern(Component2 axisOwner, string axisRef, int instanceCount, double angle, params Component2[] seedComponents)
+{
+    if (_model == null || _assembly == null)
+        throw new InvalidOperationException("No open assembly.");
+
+    if (seedComponents == null || seedComponents.Length == 0)
+        throw new ArgumentException("At least one seed component is required.", nameof(seedComponents));
+
+    if (instanceCount < 2)
+        throw new ArgumentOutOfRangeException(nameof(instanceCount), "Circular pattern count must be at least 2.");
+
+    string asmName = _model.GetTitle().Split('.')[0];
+    string axisSelection = (axisOwner != null) ? $"{axisRef}@{axisOwner.Name2}@{asmName}" : axisRef;
+    ModelDocExtension swExt = _model.Extension;
+    SelectionMgr selectionMgr = _model.SelectionManager as SelectionMgr;
+    if (selectionMgr == null)
+        throw new Exception("Could not access selection manager for circular component pattern");
+
+    foreach (int axisMark in new[] { 1, 2, 4, 256 })
+    {
+        foreach (int componentMark in new[] { 1, 4, 256, 2 })
+        {
+            foreach (bool axisFirst in new[] { true, false })
+            {
+                SelectData axisSelectData = selectionMgr.CreateSelectData();
+                SelectData componentSelectData = selectionMgr.CreateSelectData();
+                if (axisSelectData == null || componentSelectData == null)
+                    continue;
+
+                axisSelectData.Mark = axisMark;
+                componentSelectData.Mark = componentMark;
+
+                _model.ClearSelection2(true);
+
+                bool axisSelected;
+                int selectedSeedCount;
+
+                if (axisFirst)
+                {
+                    axisSelected = SelectPatternAxis(false, axisSelectData);
+                    selectedSeedCount = SelectSeedComponents(true, componentSelectData);
+                }
+                else
+                {
+                    selectedSeedCount = SelectSeedComponents(false, componentSelectData);
+                    axisSelected = SelectPatternAxis(true, axisSelectData);
+                }
+
+                if (!axisSelected || selectedSeedCount != seedComponents.Length)
+                    continue;
+
+                Feature patternFeature = _model.FeatureManager.FeatureCircularPattern5(
+                    instanceCount,
+                    angle,
+                    false,
+                    string.Empty,
+                    false,
+                    true,
+                    false,
+                    false,
+                    false,
+                    false,
+                    0,
+                    0.0,
+                    string.Empty,
+                    false) as Feature;
+
+                if (patternFeature != null)
+                {
+                    _model.EditRebuild3();
+                    return patternFeature;
+                }
+            }
+        }
+    }
+
+    throw new Exception("Failed to create circular component pattern");
+
+    bool SelectPatternAxis(bool append, SelectData axisSelectData)
+    {
+        if (axisOwner != null && !IsPlaneReference(axisRef) && !IsAxisReference(axisRef))
+        {
+            PartDoc partDoc = axisOwner.GetModelDoc2() as PartDoc;
+            Entity faceInPart = partDoc?.GetEntityByName(axisRef, (int)swSelectType_e.swSelFACES) as Entity;
+            Entity faceInAssembly = (faceInPart != null) ? axisOwner.GetCorrespondingEntity(faceInPart) as Entity : null;
+            return faceInAssembly != null && faceInAssembly.Select4(append, axisSelectData);
+        }
+
+        string selType = IsPlaneReference(axisRef) ? "PLANE" : (IsAxisReference(axisRef) ? "AXIS" : "FACE");
+        return swExt.SelectByID2(axisSelection, selType, 0, 0, 0, append, axisSelectData.Mark, null, 0);
+    }
+
+    int SelectSeedComponents(bool appendFirst, SelectData componentSelectData)
+    {
+        int count = 0;
+        bool append = appendFirst;
+        foreach (Component2 seedComponent in seedComponents)
+        {
+            if (seedComponent != null && seedComponent.Select4(append, componentSelectData, false))
+            {
+                count++;
+                append = true;
+            }
+        }
+
+        return count;
     }
 }
 
