@@ -5,12 +5,63 @@ using SolidWorks.Interop.swconst;
 using SwAutomation.Pdm; // Make sure this matches your namespace
 namespace SwAutomation;
 
-public abstract class AutomationDocumentBase
+internal static class AutomationSupport
 {
-    protected readonly SldWorks _swApp;
-    protected readonly PdmModule _pdm;
+    public const double MmToMeters = 0.001;
 
-    protected AutomationDocumentBase(SldWorks swApp, PdmModule pdm)
+    public static string RequireText(string value, string propertyName, string ownerName)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            throw new InvalidOperationException($"{ownerName} requires a non-empty {propertyName} value.");
+
+        return value;
+    }
+}
+
+internal sealed class AutomationUiScope : IDisposable
+{
+    private readonly SldWorks _swApp;
+    private readonly bool _originalCommandInProgress;
+    private readonly bool _originalInputDimValOnCreate;
+    private readonly bool _originalEnableConfirmationCorner;
+    private readonly bool _originalSketchPreviewDimensionOnSelect;
+
+    public AutomationUiScope(SldWorks swApp)
+    {
+        _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
+        _originalCommandInProgress = _swApp.CommandInProgress;
+        _originalInputDimValOnCreate = _swApp.GetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate);
+        _originalEnableConfirmationCorner = _swApp.GetUserPreferenceToggle((int)swUserPreferenceToggle_e.swEnableConfirmationCorner);
+        _originalSketchPreviewDimensionOnSelect = _swApp.GetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchPreviewDimensionOnSelect);
+
+        _swApp.CommandInProgress = true;
+        _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, false);
+        _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swEnableConfirmationCorner, false);
+        _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchPreviewDimensionOnSelect, false);
+    }
+
+    public void Dispose()
+    {
+        try
+        {
+            _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, _originalInputDimValOnCreate);
+            _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swEnableConfirmationCorner, _originalEnableConfirmationCorner);
+            _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchPreviewDimensionOnSelect, _originalSketchPreviewDimensionOnSelect);
+        }
+        finally
+        {
+            _swApp.CommandInProgress = _originalCommandInProgress;
+        }
+    }
+}
+
+public sealed class StatorSheetPart
+{
+    private const double MmToMeters = AutomationSupport.MmToMeters;
+    private readonly SldWorks _swApp;
+    private readonly PdmModule _pdm;
+
+    public StatorSheetPart(SldWorks swApp, PdmModule pdm)
     {
         _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
         _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
@@ -19,87 +70,7 @@ public abstract class AutomationDocumentBase
     public string OutputFolder { get; set; } = string.Empty;
     public bool CloseAfterCreate { get; set; }
     public bool SaveToPdm { get; set; }
-
-    public abstract string Create();
-
-    protected string GetRequiredOutputFolder()
-    {
-        if (string.IsNullOrWhiteSpace(OutputFolder))
-            throw new InvalidOperationException($"{GetType().Name} requires a non-empty {nameof(OutputFolder)} value.");
-
-        return OutputFolder;
-    }
-}
-
-public abstract class PartDefinitionBase : AutomationDocumentBase
-{
-    protected const double MmToMeters = 0.001;
-
-    protected PartDefinitionBase(SldWorks swApp, PdmModule pdm, string localFileName)
-        : base(swApp, pdm)
-    {
-        LocalFileName = localFileName ?? throw new ArgumentNullException(nameof(localFileName));
-    }
-
-    public string LocalFileName { get; set; }
-
-    protected string GetRequiredLocalFileName()
-    {
-        if (string.IsNullOrWhiteSpace(LocalFileName))
-            throw new InvalidOperationException($"{GetType().Name} requires a non-empty {nameof(LocalFileName)} value.");
-
-        return LocalFileName;
-    }
-
-    protected AutomationUiScope BeginAutomationUiSuppression()
-    {
-        return new AutomationUiScope(_swApp);
-    }
-
-    protected sealed class AutomationUiScope : IDisposable
-    {
-        private readonly SldWorks _swApp;
-        private readonly bool _originalCommandInProgress;
-        private readonly bool _originalInputDimValOnCreate;
-        private readonly bool _originalEnableConfirmationCorner;
-        private readonly bool _originalSketchPreviewDimensionOnSelect;
-
-        public AutomationUiScope(SldWorks swApp)
-        {
-            _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
-            _originalCommandInProgress = _swApp.CommandInProgress;
-            _originalInputDimValOnCreate = _swApp.GetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate);
-            _originalEnableConfirmationCorner = _swApp.GetUserPreferenceToggle((int)swUserPreferenceToggle_e.swEnableConfirmationCorner);
-            _originalSketchPreviewDimensionOnSelect = _swApp.GetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchPreviewDimensionOnSelect);
-
-            _swApp.CommandInProgress = true;
-            _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, false);
-            _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swEnableConfirmationCorner, false);
-            _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchPreviewDimensionOnSelect, false);
-        }
-
-        public void Dispose()
-        {
-            try
-            {
-                _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swInputDimValOnCreate, _originalInputDimValOnCreate);
-                _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swEnableConfirmationCorner, _originalEnableConfirmationCorner);
-                _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchPreviewDimensionOnSelect, _originalSketchPreviewDimensionOnSelect);
-            }
-            finally
-            {
-                _swApp.CommandInProgress = _originalCommandInProgress;
-            }
-        }
-    }
-}
-
-public sealed class StatorSheetPart : PartDefinitionBase
-{
-    public StatorSheetPart(SldWorks swApp, PdmModule pdm)
-        : base(swApp, pdm, "StatorBleche.SLDPRT")
-    {
-    }
+    public string LocalFileName { get; set; } = "StatorBleche.SLDPRT";
 
     public double OuterDiameterMm { get; set; } = 990.0;
     public double InnerDiameterMm { get; set; } = 640.0;
@@ -109,8 +80,16 @@ public sealed class StatorSheetPart : PartDefinitionBase
     public double SlotTopYmm { get; set; } = 405.2;
     public double AngleInDegrees { get; set; } = 70.0;
     public double FilletRadiusMm { get; set; } = 1.0;
+    public double SlotGuideSpacingMm { get; set; } = 5.7;
+    public double SlotGuideOffsetMm { get; set; } = -0.7;
+    public int SlotPatternCount { get; set; } = 60;
+    public string MaterialName { get; set; } = "AISI 1020";
 
-    public override string Create()
+    private string GetRequiredOutputFolder() => AutomationSupport.RequireText(OutputFolder, nameof(OutputFolder), nameof(StatorSheetPart));
+    private string GetRequiredLocalFileName() => AutomationSupport.RequireText(LocalFileName, nameof(LocalFileName), nameof(StatorSheetPart));
+    private AutomationUiScope BeginAutomationUiSuppression() => new(_swApp);
+
+    public string Create()
     {
         double Mm(double mm) => mm * MmToMeters;
         using var automationUi = BeginAutomationUiSuppression();
@@ -127,6 +106,10 @@ public sealed class StatorSheetPart : PartDefinitionBase
         double slotTopYmm = SlotTopYmm;
         double angleInDegrees = AngleInDegrees;
         double filletradius = FilletRadiusMm;
+        double slotGuideSpacingMm = SlotGuideSpacingMm;
+        double slotGuideOffsetMm = SlotGuideOffsetMm;
+        int slotPatternCount = SlotPatternCount;
+        string materialName = MaterialName;
 
         // Derived dimensions (m)
         double outerRadius = Mm(outerDiameterMm / 2.0);
@@ -139,6 +122,8 @@ public sealed class StatorSheetPart : PartDefinitionBase
         double leftX = -halfWidth;
         double angleInRadians = angleInDegrees * Math.PI / 180.0;
         double radiusMm = Mm(filletradius);
+        double slotGuideSpacing = Mm(slotGuideSpacingMm);
+        double slotGuideOffset = Mm(slotGuideOffsetMm);
 
         ModelDoc2 swModel = null;
         SketchManager swSketchManager = null;
@@ -165,7 +150,7 @@ public sealed class StatorSheetPart : PartDefinitionBase
 
             // Apply material to the  part
             PartDoc statorPart = swModel as PartDoc;
-            statorPart.SetMaterialPropertyName2("", "", Name: "AISI 1020");
+            statorPart.SetMaterialPropertyName2("", "", Name: materialName);
 
             bool selected = swModel.Extension.SelectByID2("Ebene vorne", "PLANE", 0, 0, 0, false, 0, null, 0);
             if (!selected) throw new Exception("Could not select Front Plane");
@@ -280,7 +265,7 @@ public sealed class StatorSheetPart : PartDefinitionBase
             if (displayDim == null) throw new Exception("Could not create slot guide spacing dimension");
             swDim = displayDim.GetDimension();
             if (swDim == null) throw new Exception("Could not access slot guide spacing dimension");
-            swDim.SystemValue = Mm(5.7);
+            swDim.SystemValue = slotGuideSpacing;
             swModel.ClearSelection2(true);
 
             line2.Select4(false, null);
@@ -300,7 +285,7 @@ public sealed class StatorSheetPart : PartDefinitionBase
             if (displayDim == null) throw new Exception("Could not create slot guide offset dimension");
             swDim = displayDim.GetDimension();
             if (swDim == null) throw new Exception("Could not access slot guide offset dimension");
-            swDim.SystemValue = Mm(-0.7);
+            swDim.SystemValue = slotGuideOffset;
             swModel.ClearSelection2(true);
 
             swModel.Extension.SelectByID2("", "SKETCHPOINT", halfWidth, topY, 0, false, 0, null, 0);
@@ -347,8 +332,8 @@ public sealed class StatorSheetPart : PartDefinitionBase
             swModel.SketchManager.CreateConstructionGeometry();
 
             _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, true);
-            SketchSegment line3 = (SketchSegment)swSketchManager.CreateLine(-halfWidth, Mm(320), 0, 0, 0, 0);
-            SketchSegment line4 = (SketchSegment)swSketchManager.CreateLine(halfWidth, Mm(320), 0, 0, 0, 0);
+            SketchSegment line3 = (SketchSegment)swSketchManager.CreateLine(-halfWidth, bottomY, 0, 0, 0, 0);
+            SketchSegment line4 = (SketchSegment)swSketchManager.CreateLine(halfWidth, bottomY, 0, 0, 0, 0);
             line3.Select4(false, null);
             swModel.Extension.SelectByID2("", "EXTSKETCHPOINT", 0, 0, 0, true, 0, null, 0);
             swModel.SketchAddConstraints("sgCOINCIDENT");
@@ -360,7 +345,7 @@ public sealed class StatorSheetPart : PartDefinitionBase
             swModel.Extension.SelectByID2("Z-Achse", "AXIS", 0, 0, 0, false, 1, null, 0);
             swModel.Extension.SelectByID2("Cut-Extrude1", "BODYFEATURE", 0, 0, 0, true, 4, null, 0);
             Feature myPattern = (Feature)swModel.FeatureManager.FeatureCircularPattern5(
-                60,
+                slotPatternCount,
                 2 * Math.PI,
                 false,
                 "",
@@ -414,12 +399,22 @@ public sealed class StatorSheetPart : PartDefinitionBase
 
 }
 
-public sealed class ShaftPart : PartDefinitionBase
+public sealed class ShaftPart
 {
+    private const double MmToMeters = AutomationSupport.MmToMeters;
+    private readonly SldWorks _swApp;
+    private readonly PdmModule _pdm;
+
     public ShaftPart(SldWorks swApp, PdmModule pdm)
-        : base(swApp, pdm, "shaft.SLDPRT")
     {
+        _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
+        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
     }
+
+    public string OutputFolder { get; set; } = string.Empty;
+    public bool CloseAfterCreate { get; set; }
+    public bool SaveToPdm { get; set; }
+    public string LocalFileName { get; set; } = "shaft.SLDPRT";
 
     public double Radius1Mm { get; set; } = 60.0;
     public double Radius2Mm { get; set; } = 50.0;
@@ -432,14 +427,20 @@ public sealed class ShaftPart : PartDefinitionBase
     public double Length3Mm { get; set; } = 220.0;
     public double Length4Mm { get; set; } = 110.0;
     public double Length5Mm { get; set; } = 150.0;
+    public string MaterialName { get; set; } = "AISI 1020";
 
-    public override string Create()
+    private string GetRequiredOutputFolder() => AutomationSupport.RequireText(OutputFolder, nameof(OutputFolder), nameof(ShaftPart));
+    private string GetRequiredLocalFileName() => AutomationSupport.RequireText(LocalFileName, nameof(LocalFileName), nameof(ShaftPart));
+    private AutomationUiScope BeginAutomationUiSuppression() => new(_swApp);
+
+    public string Create()
     {
         double Mm(double mm) => mm * MmToMeters;
         using var automationUi = BeginAutomationUiSuppression();
         string outFolder = GetRequiredOutputFolder();
         bool closeAfterCreate = CloseAfterCreate;
         bool saveToPdm = SaveToPdm;
+        string materialName = MaterialName;
 
 
         // Section radii (mm) - editable.
@@ -540,7 +541,7 @@ public sealed class ShaftPart : PartDefinitionBase
 
         PartDoc shaftPart = swModel as PartDoc;
         // Apply material to the  part
-        shaftPart.SetMaterialPropertyName2("", "", Name: "AISI 1020");
+        shaftPart.SetMaterialPropertyName2("", "", Name: materialName);
 
         string savedPath;
         if (saveToPdm)
@@ -566,17 +567,30 @@ public sealed class ShaftPart : PartDefinitionBase
 
 }
 
-public sealed class SkeletonPart : PartDefinitionBase
+public sealed class SkeletonPart
 {
+    private const double MmToMeters = AutomationSupport.MmToMeters;
+    private readonly SldWorks _swApp;
+    private readonly PdmModule _pdm;
+
     public SkeletonPart(SldWorks swApp, PdmModule pdm)
-        : base(swApp, pdm, "skeleton.SLDPRT")
     {
+        _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
+        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
     }
+
+    public string OutputFolder { get; set; } = string.Empty;
+    public bool CloseAfterCreate { get; set; }
+    public bool SaveToPdm { get; set; }
+    public string LocalFileName { get; set; } = "skeleton.SLDPRT";
 
     public double SideOffsetMm { get; set; } = 500.0;
     public double GroundOffsetMm { get; set; } = -250.0;
 
-    public override string Create()
+    private string GetRequiredOutputFolder() => AutomationSupport.RequireText(OutputFolder, nameof(OutputFolder), nameof(SkeletonPart));
+    private string GetRequiredLocalFileName() => AutomationSupport.RequireText(LocalFileName, nameof(LocalFileName), nameof(SkeletonPart));
+
+    public string Create()
     {
         double sideOffset = SideOffsetMm;
         double groundOffset = GroundOffsetMm;
@@ -653,12 +667,22 @@ public sealed class SkeletonPart : PartDefinitionBase
     }
 }
 
-public sealed class StatorDistanceSheetPart : PartDefinitionBase
+public sealed class StatorDistanceSheetPart
 {
+    private const double MmToMeters = AutomationSupport.MmToMeters;
+    private readonly SldWorks _swApp;
+    private readonly PdmModule _pdm;
+
     public StatorDistanceSheetPart(SldWorks swApp, PdmModule pdm)
-        : base(swApp, pdm, "StatorDistanceBleche.SLDPRT")
     {
+        _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
+        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
     }
+
+    public string OutputFolder { get; set; } = string.Empty;
+    public bool CloseAfterCreate { get; set; }
+    public bool SaveToPdm { get; set; }
+    public string LocalFileName { get; set; } = "StatorDistanceBleche.SLDPRT";
 
     public double OuterDiameterMm { get; set; } = 990.0;
     public double InnerDiameterMm { get; set; } = 640.0;
@@ -677,8 +701,14 @@ public sealed class StatorDistanceSheetPart : PartDefinitionBase
     public double BossCutInnerLegWidthMm { get; set; } = 1.5;
     public double BossCutBoundaryExtensionMm { get; set; } = 2.0;
     public int BossCircularPatternCount { get; set; } = 60;
+    public int SlotPatternCount { get; set; } = 60;
+    public string MaterialName { get; set; } = "AISI 1020";
 
-    public override string Create()
+    private string GetRequiredOutputFolder() => AutomationSupport.RequireText(OutputFolder, nameof(OutputFolder), nameof(StatorDistanceSheetPart));
+    private string GetRequiredLocalFileName() => AutomationSupport.RequireText(LocalFileName, nameof(LocalFileName), nameof(StatorDistanceSheetPart));
+    private AutomationUiScope BeginAutomationUiSuppression() => new(_swApp);
+
+    public string Create()
     {
         double Mm(double mm) => mm * MmToMeters;
         using var automationUi = BeginAutomationUiSuppression();
@@ -709,6 +739,8 @@ public sealed class StatorDistanceSheetPart : PartDefinitionBase
         double bossCutInnerLegWidthMm = BossCutInnerLegWidthMm;
         double bossCutBoundaryExtensionMm = BossCutBoundaryExtensionMm;
         int bossCircularPatternCount = BossCircularPatternCount;
+        int slotPatternCount = SlotPatternCount;
+        string materialName = MaterialName;
 
         // Derived dimensions (m)
         double outerRadius = Mm(outerDiameterMm / 2.0);
@@ -759,7 +791,7 @@ public sealed class StatorDistanceSheetPart : PartDefinitionBase
 
             // Apply material to the  part
             PartDoc statorPart = swModel as PartDoc;
-            statorPart.SetMaterialPropertyName2("", "", Name: "AISI 1020");
+            statorPart.SetMaterialPropertyName2("", "", Name: materialName);
 
             bool selected = swModel.Extension.SelectByID2("Ebene vorne", "PLANE", 0, 0, 0, false, 0, null, 0);
             if (!selected) throw new Exception("Could not select Front Plane");
@@ -930,7 +962,7 @@ public sealed class StatorDistanceSheetPart : PartDefinitionBase
             swModel.Extension.SelectByID2("Z-Achse", "AXIS", 0, 0, 0, false, 1, null, 0);
             swModel.Extension.SelectByID2("Cut-Extrude1", "BODYFEATURE", 0, 0, 0, true, 4, null, 0);
             Feature myPattern = (Feature)swModel.FeatureManager.FeatureCircularPattern5(
-                60,
+                slotPatternCount,
                 2 * Math.PI,
                 false,
                 "",
@@ -1574,12 +1606,22 @@ public sealed class StatorDistanceSheetPart : PartDefinitionBase
 
 }
 
-public sealed class StatorEndSheetPart : PartDefinitionBase
+public sealed class StatorEndSheetPart
 {
+    private const double MmToMeters = AutomationSupport.MmToMeters;
+    private readonly SldWorks _swApp;
+    private readonly PdmModule _pdm;
+
     public StatorEndSheetPart(SldWorks swApp, PdmModule pdm)
-        : base(swApp, pdm, "StatorEndBleche.SLDPRT")
     {
+        _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
+        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
     }
+
+    public string OutputFolder { get; set; } = string.Empty;
+    public bool CloseAfterCreate { get; set; }
+    public bool SaveToPdm { get; set; }
+    public string LocalFileName { get; set; } = "StatorEndBleche.SLDPRT";
 
     public double OuterDiameterMm { get; set; } = 990.0;
     public double InnerDiameterMm { get; set; } = 640.0;
@@ -1587,8 +1629,14 @@ public sealed class StatorEndSheetPart : PartDefinitionBase
     public double SlotWidthMm { get; set; } = 20.5;
     public double SlotBottomYmm { get; set; } = 320.0;
     public double SlotTopYmm { get; set; } = 406.0;
+    public int SlotPatternCount { get; set; } = 60;
+    public string MaterialName { get; set; } = "AISI 1020";
 
-    public override string Create()
+    private string GetRequiredOutputFolder() => AutomationSupport.RequireText(OutputFolder, nameof(OutputFolder), nameof(StatorEndSheetPart));
+    private string GetRequiredLocalFileName() => AutomationSupport.RequireText(LocalFileName, nameof(LocalFileName), nameof(StatorEndSheetPart));
+    private AutomationUiScope BeginAutomationUiSuppression() => new(_swApp);
+
+    public string Create()
     {
         double Mm(double mm) => mm * MmToMeters;
         using var automationUi = BeginAutomationUiSuppression();
@@ -1608,6 +1656,8 @@ public sealed class StatorEndSheetPart : PartDefinitionBase
         double slotWidthMm = SlotWidthMm;
         double slotBottomYmm = SlotBottomYmm;
         double slotTopYmm = SlotTopYmm;
+        int slotPatternCount = SlotPatternCount;
+        string materialName = MaterialName;
 
         // Derived dimensions (m)
         double outerRadius = Mm(outerDiameterMm / 2.0);
@@ -1639,7 +1689,7 @@ public sealed class StatorEndSheetPart : PartDefinitionBase
             swSketchManager = swModel.SketchManager;
 
             PartDoc statorPart = swModel as PartDoc;
-            statorPart.SetMaterialPropertyName2("", "", Name: "AISI 1020");
+            statorPart.SetMaterialPropertyName2("", "", Name: materialName);
 
             bool selected = swModel.Extension.SelectByID2("Ebene vorne", "PLANE", 0, 0, 0, false, 0, null, 0);
             if (!selected) throw new Exception("Could not select Front Plane");
@@ -1808,7 +1858,7 @@ public sealed class StatorEndSheetPart : PartDefinitionBase
             swModel.Extension.SelectByID2("Z-Achse", "AXIS", 0, 0, 0, false, 1, null, 0);
             swModel.Extension.SelectByID2("Cut-Extrude1", "BODYFEATURE", 0, 0, 0, true, 4, null, 0);
             Feature myPattern = (Feature)swModel.FeatureManager.FeatureCircularPattern5(
-                60,
+                slotPatternCount,
                 2 * Math.PI,
                 false,
                 "",
@@ -1860,12 +1910,22 @@ public sealed class StatorEndSheetPart : PartDefinitionBase
 
 }
 
-public sealed class TorsionBarPart : PartDefinitionBase
+public sealed class TorsionBarPart
 {
+    private const double MmToMeters = AutomationSupport.MmToMeters;
+    private readonly SldWorks _swApp;
+    private readonly PdmModule _pdm;
+
     public TorsionBarPart(SldWorks swApp, PdmModule pdm)
-        : base(swApp, pdm, "TorsionBar.SLDPRT")
     {
+        _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
+        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
     }
+
+    public string OutputFolder { get; set; } = string.Empty;
+    public bool CloseAfterCreate { get; set; }
+    public bool SaveToPdm { get; set; }
+    public string LocalFileName { get; set; } = "TorsionBar.SLDPRT";
 
     public double BarLengthMm { get; set; } = 1074.0;
     public double BarHeightMm { get; set; } = 40.0;
@@ -1882,8 +1942,13 @@ public sealed class TorsionBarPart : PartDefinitionBase
     public string InnerTapSizeFallback { get; set; } = "M16";
     public string P0001ConfigName { get; set; } = "P0001";
     public string P0002ConfigName { get; set; } = "P0002";
+    public string MaterialName { get; set; } = "AISI 1020";
 
-    public override string Create()
+    private string GetRequiredOutputFolder() => AutomationSupport.RequireText(OutputFolder, nameof(OutputFolder), nameof(TorsionBarPart));
+    private string GetRequiredLocalFileName() => AutomationSupport.RequireText(LocalFileName, nameof(LocalFileName), nameof(TorsionBarPart));
+    private AutomationUiScope BeginAutomationUiSuppression() => new(_swApp);
+
+    public string Create()
     {
         double Mm(double mm) => mm * MmToMeters;
         using var automationUi = BeginAutomationUiSuppression();
@@ -1913,6 +1978,7 @@ public sealed class TorsionBarPart : PartDefinitionBase
 
         string p0001ConfigName = P0001ConfigName;
         string p0002ConfigName = P0002ConfigName;
+        string materialName = MaterialName;
 
         // Derived dimensions (m)
         double barLength = Mm(barLengthMm);
@@ -1946,7 +2012,7 @@ public sealed class TorsionBarPart : PartDefinitionBase
             swSketchManager = swModel.SketchManager;
 
             PartDoc torsionBarPart = swModel as PartDoc;
-            torsionBarPart.SetMaterialPropertyName2("", "", Name: "AISI 1020");
+            torsionBarPart.SetMaterialPropertyName2("", "", Name: materialName);
 
             ConfigurationManager configMgr = swModel.ConfigurationManager;
             if (configMgr == null)
@@ -2152,12 +2218,22 @@ public sealed class TorsionBarPart : PartDefinitionBase
 
 }
 
-public sealed class PressPlatePart : PartDefinitionBase
+public sealed class PressPlatePart
 {
+    private const double MmToMeters = AutomationSupport.MmToMeters;
+    private readonly SldWorks _swApp;
+    private readonly PdmModule _pdm;
+
     public PressPlatePart(SldWorks swApp, PdmModule pdm)
-        : base(swApp, pdm, "PressPlate.SLDPRT")
     {
+        _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
+        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
     }
+
+    public string OutputFolder { get; set; } = string.Empty;
+    public bool CloseAfterCreate { get; set; }
+    public bool SaveToPdm { get; set; }
+    public string LocalFileName { get; set; } = "PressPlate.SLDPRT";
 
     public double OuterDiameterMm { get; set; } = 990.0;
     public double RingInnerDiameterMm { get; set; } = 840.0;
@@ -2167,8 +2243,14 @@ public sealed class PressPlatePart : PartDefinitionBase
     public double PlateBodyThicknessMm { get; set; } = 10.0;
     public double PlateWidthMm { get; set; } = 6.0;
     public int PlateCount { get; set; } = 60;
+    public double AssemblyAngleDeg { get; set; } = 3.0;
+    public string MaterialName { get; set; } = "AISI 1020";
 
-    public override string Create()
+    private string GetRequiredOutputFolder() => AutomationSupport.RequireText(OutputFolder, nameof(OutputFolder), nameof(PressPlatePart));
+    private string GetRequiredLocalFileName() => AutomationSupport.RequireText(LocalFileName, nameof(LocalFileName), nameof(PressPlatePart));
+    private AutomationUiScope BeginAutomationUiSuppression() => new(_swApp);
+
+    public string Create()
     {
         double Mm(double mm) => mm * MmToMeters;
         using var automationUi = BeginAutomationUiSuppression();
@@ -2190,6 +2272,7 @@ public sealed class PressPlatePart : PartDefinitionBase
         double plateBodyThicknessMm = PlateBodyThicknessMm;
         double plateWidthMm = PlateWidthMm;
         int plateCount = PlateCount;
+        string materialName = MaterialName;
 
         // Derived dimensions (m)
         double outerRadius = Mm(outerDiameterMm / 2.0);
@@ -2225,7 +2308,7 @@ public sealed class PressPlatePart : PartDefinitionBase
             swSketchManager = swModel.SketchManager;
 
             PartDoc pressPlatePart = swModel as PartDoc;
-            pressPlatePart.SetMaterialPropertyName2("", "", Name: "AISI 1020");
+            pressPlatePart.SetMaterialPropertyName2("", "", Name: materialName);
 
             bool selected = swModel.Extension.SelectByID2("Ebene vorne", "PLANE", 0, 0, 0, false, 0, null, 0);
             if (!selected) throw new Exception("Could not select Front Plane for press plate");
@@ -2452,12 +2535,22 @@ public sealed class PressPlatePart : PartDefinitionBase
 
 }
 
-public sealed class StatorPressringNdePart : PartDefinitionBase
+public sealed class StatorPressringNdePart
 {
+    private const double MmToMeters = AutomationSupport.MmToMeters;
+    private readonly SldWorks _swApp;
+    private readonly PdmModule _pdm;
+
     public StatorPressringNdePart(SldWorks swApp, PdmModule pdm)
-        : base(swApp, pdm, "StatorPressringNDE.SLDPRT")
     {
+        _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
+        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
     }
+
+    public string OutputFolder { get; set; } = string.Empty;
+    public bool CloseAfterCreate { get; set; }
+    public bool SaveToPdm { get; set; }
+    public string LocalFileName { get; set; } = "StatorPressringNDE.SLDPRT";
 
     public double OuterDiameterMm { get; set; } = 1100.0;
     public double InnerDiameterMm { get; set; } = 840.0;
@@ -2471,8 +2564,13 @@ public sealed class StatorPressringNdePart : PartDefinitionBase
     public double PocketHeightMm { get; set; } = 36.0;
     public double PocketCornerRadiusMm { get; set; } = 5.0;
     public int PocketCount { get; set; } = 8;
+    public string MaterialName { get; set; } = "AISI 1020";
 
-    public override string Create()
+    private string GetRequiredOutputFolder() => AutomationSupport.RequireText(OutputFolder, nameof(OutputFolder), nameof(StatorPressringNdePart));
+    private string GetRequiredLocalFileName() => AutomationSupport.RequireText(LocalFileName, nameof(LocalFileName), nameof(StatorPressringNdePart));
+    private AutomationUiScope BeginAutomationUiSuppression() => new(_swApp);
+
+    public string Create()
     {
         double Mm(double mm) => mm * MmToMeters;
         using var automationUi = BeginAutomationUiSuppression();
@@ -2499,6 +2597,7 @@ public sealed class StatorPressringNdePart : PartDefinitionBase
         double pocketHeightMm = PocketHeightMm;
         double pocketCornerRadiusMm = PocketCornerRadiusMm;
         int pocketCount = PocketCount;
+        string materialName = MaterialName;
 
         // Derived dimensions (m)
         double outerRadius = Mm(outerDiameterMm / 2.0);
@@ -2726,7 +2825,7 @@ public sealed class StatorPressringNdePart : PartDefinitionBase
             swSketchManager = swModel.SketchManager;
 
             PartDoc pressRingPart = swModel as PartDoc;
-            pressRingPart?.SetMaterialPropertyName2("", "", Name: "AISI 1020");
+            pressRingPart?.SetMaterialPropertyName2("", "", Name: materialName);
 
             bool selected = swModel.Extension.SelectByID2("Ebene vorne", "PLANE", 0, 0, 0, false, 0, null, 0);
             if (!selected)

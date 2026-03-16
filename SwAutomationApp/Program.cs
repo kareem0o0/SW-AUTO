@@ -13,10 +13,8 @@ public static class Program
     {
         Console.WriteLine("Connecting to SOLIDWORKS...");
 
-        SldWorks swApp = new SldWorks
-        {
-            Visible = true
-        };
+        SldWorks swApp = new SldWorks();
+        swApp.Visible = true;
 
         var pdm = new PdmModule();
         string localOutputFolder = @"C:\Users\kareem.salah\Downloads\birr machines\birr machines\parts";
