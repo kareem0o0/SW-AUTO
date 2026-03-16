@@ -7,139 +7,269 @@ using SwAutomation.Pdm;
 
 namespace SwAutomation;
 
-public sealed class TorsionBarDrawing
+internal static class DrawingMethods
 {
-    private const double MmToMeters = AutomationSupport.MmToMeters;
-    private const string DefaultBirrSheetFormatFolder = @"C:\Users\kareem.salah\PDM\Birr Machines PDM\40_Templates\Solidworks\Blattformate\Birr Machines";
-
-    private readonly SldWorks _swApp;
-    private readonly PdmModule _pdm;
-
-    private readonly struct SheetOption
+    public static string CreateTorsionBarDrawing(TorsionBarPart part, SldWorks swApp, PdmModule pdm)
     {
-        public SheetOption(string paperCode, swDwgPaperSizes_e paperSize, double widthMm, double heightMm)
-        {
-            PaperCode = paperCode;
-            PaperSize = paperSize;
-            WidthMm = widthMm;
-            HeightMm = heightMm;
-        }
+        if (part == null)
+            throw new InvalidOperationException("CreateTorsionBarDrawing requires a TorsionBarPart instance.");
+        if (swApp == null)
+            throw new ArgumentNullException(nameof(swApp));
+        if (pdm == null)
+            throw new ArgumentNullException(nameof(pdm));
 
-        public string PaperCode { get; }
-        public swDwgPaperSizes_e PaperSize { get; }
-        public double WidthMm { get; }
-        public double HeightMm { get; }
-    }
+        const double mmToMeters = AutomationSupport.MmToMeters;
+        double Mm(double mm) => mm * mmToMeters;
 
-    private readonly struct LayoutPlan
-    {
-        public LayoutPlan(
-            SheetOption sheet,
-            double scaleNumerator,
-            double scaleDenominator,
-            double frontXmm,
-            double frontYmm,
-            double topXmm,
-            double topYmm,
-            double rightXmm,
-            double rightYmm)
-        {
-            Sheet = sheet;
-            ScaleNumerator = scaleNumerator;
-            ScaleDenominator = scaleDenominator;
-            FrontXmm = frontXmm;
-            FrontYmm = frontYmm;
-            TopXmm = topXmm;
-            TopYmm = topYmm;
-            RightXmm = rightXmm;
-            RightYmm = rightYmm;
-        }
-
-        public SheetOption Sheet { get; }
-        public double ScaleNumerator { get; }
-        public double ScaleDenominator { get; }
-        public double FrontXmm { get; }
-        public double FrontYmm { get; }
-        public double TopXmm { get; }
-        public double TopYmm { get; }
-        public double RightXmm { get; }
-        public double RightYmm { get; }
-    }
-
-    public TorsionBarDrawing(SldWorks swApp, PdmModule pdm)
-    {
-        _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
-        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
-    }
-
-    public string OutputFolder { get; set; } = string.Empty;
-    public bool CloseAfterCreate { get; set; }
-    public bool SaveToPdm { get; set; }
-    public string LocalFileName { get; set; } = "TorsionBar.SLDDRW";
-    public string SheetName { get; set; } = "Sheet1";
-    public string LanguageCode { get; set; } = "EN";
-    public string TemplateFolderPath { get; set; } = DefaultBirrSheetFormatFolder;
-    public bool PreferSolidWorksTemplateLocations { get; set; } = true;
-    public string SheetFormatPathOverride { get; set; } = string.Empty;
-    public string DrawingTemplatePathOverride { get; set; } = string.Empty;
-    public bool UseFirstAngleProjection { get; set; }
-    public double BottomTitleBlockClearanceMm { get; set; } = 85.0;
-    public string ReferencedConfiguration { get; set; } = "P0002";
-    public TorsionBarPart Part { get; set; } = null;
-
-    private string GetRequiredOutputFolder() => AutomationSupport.RequireText(OutputFolder, nameof(OutputFolder), nameof(TorsionBarDrawing));
-    private string GetRequiredLocalFileName() => AutomationSupport.RequireText(LocalFileName, nameof(LocalFileName), nameof(TorsionBarDrawing));
-    private TorsionBarPart GetRequiredPart()
-    {
-        if (Part == null)
-            throw new InvalidOperationException("TorsionBarDrawing requires a TorsionBarPart instance.");
-
-        return Part;
-    }
-
-    public string Create()
-    {
-        string outFolder = GetRequiredOutputFolder();
+        // Use the drawing folder if one was provided. Otherwise save the drawing next to the part.
+        string outFolder = string.IsNullOrWhiteSpace(part.DrawingOutputFolder)
+            ? AutomationSupport.RequireText(part.OutputFolder, nameof(part.OutputFolder), nameof(TorsionBarPart))
+            : Path.GetFullPath(part.DrawingOutputFolder);
         Directory.CreateDirectory(outFolder);
-        TorsionBarPart part = GetRequiredPart();
 
-        string partFileName = part.Create();
+        string drawingFileName = string.IsNullOrWhiteSpace(part.DrawingLocalFileName)
+            ? Path.ChangeExtension(part.LocalFileName, ".SLDDRW")
+            : part.DrawingLocalFileName;
+
+        // The part class still owns part creation. The drawing method just uses it.
+        string partFileName = part.CreatePart();
         if (string.IsNullOrWhiteSpace(partFileName))
-            throw new InvalidOperationException("TorsionBarDrawing could not create the source TorsionBarPart.");
+            throw new InvalidOperationException("CreateTorsionBarDrawing could not create the source TorsionBarPart.");
 
         string partPath = Path.GetFullPath(Path.Combine(part.OutputFolder, partFileName));
         if (!File.Exists(partPath))
             throw new FileNotFoundException("The source Torsion Bar part file was not found after creation.", partPath);
 
-        LayoutPlan layout = BuildLayoutPlan(part);
-        string drawingTemplatePath = ResolveDrawingTemplatePath();
-        string sheetFormatPath = ResolveSheetFormatPath(layout.Sheet.PaperCode);
+        string languageCode = (part.DrawingLanguageCode ?? string.Empty).Trim().ToUpperInvariant();
+        if (languageCode != "EN" && languageCode != "DE")
+            throw new InvalidOperationException("TorsionBarPart.DrawingLanguageCode must be either EN or DE.");
 
-        ModelDoc2 drawingModel = (ModelDoc2)_swApp.NewDocument(drawingTemplatePath, 0, 0, 0);
+        // Pick the smallest paper size and scale that can fit the standard views above the title block.
+        (string PaperCode, swDwgPaperSizes_e PaperSize, double WidthMm, double HeightMm)[] sheets =
+        {
+            ("A4", swDwgPaperSizes_e.swDwgPaperA4size, 297.0, 210.0),
+            ("A3", swDwgPaperSizes_e.swDwgPaperA3size, 420.0, 297.0),
+            ("A2", swDwgPaperSizes_e.swDwgPaperA2size, 594.0, 420.0),
+            ("A1", swDwgPaperSizes_e.swDwgPaperA1size, 841.0, 594.0)
+        };
+        double[] scaleDenominators = { 1.0, 2.0, 3.0, 4.0, 5.0, 10.0 };
+        const double sideMarginMm = 20.0;
+        const double topMarginMm = 20.0;
+        const double viewGapMm = 18.0;
+        const double rightViewReserveMm = 45.0;
+        double bottomTitleBlockClearanceMm = Math.Max(0.0, part.DrawingBottomTitleBlockClearanceMm);
+
+        string paperCode = string.Empty;
+        swDwgPaperSizes_e paperSize = swDwgPaperSizes_e.swDwgPaperA3size;
+        double sheetWidthMm = 0.0;
+        double sheetHeightMm = 0.0;
+        double scaleNumerator = 1.0;
+        double scaleDenominator = 1.0;
+        double frontXmm = 0.0;
+        double frontYmm = 0.0;
+        double topXmm = 0.0;
+        double topYmm = 0.0;
+        double rightXmm = 0.0;
+        double rightYmm = 0.0;
+        bool layoutFound = false;
+
+        foreach (var sheet in sheets)
+        {
+            foreach (double candidateScaleDenominator in scaleDenominators)
+            {
+                double scale = 1.0 / candidateScaleDenominator;
+                double frontWidthMm = part.BarLengthMm * scale;
+                double frontHeightMm = part.BarHeightMm * scale;
+                double topHeightMm = part.BarThicknessMm * scale;
+                double rightWidthMm = part.BarThicknessMm * scale;
+                double rightHeightMm = part.BarHeightMm * scale;
+                double totalWidthMm = sideMarginMm + frontWidthMm + viewGapMm + Math.Max(rightWidthMm, rightViewReserveMm) + sideMarginMm;
+                double totalHeightMm = bottomTitleBlockClearanceMm + topHeightMm + viewGapMm + Math.Max(frontHeightMm, rightHeightMm) + topMarginMm;
+
+                if (totalWidthMm > sheet.WidthMm || totalHeightMm > sheet.HeightMm)
+                    continue;
+
+                paperCode = sheet.PaperCode;
+                paperSize = sheet.PaperSize;
+                sheetWidthMm = sheet.WidthMm;
+                sheetHeightMm = sheet.HeightMm;
+                scaleDenominator = candidateScaleDenominator;
+                topXmm = sideMarginMm + (frontWidthMm / 2.0);
+                frontXmm = topXmm;
+                rightXmm = sideMarginMm + frontWidthMm + viewGapMm + (rightWidthMm / 2.0);
+                topYmm = sheet.HeightMm - topMarginMm - (topHeightMm / 2.0);
+                frontYmm = topYmm - (topHeightMm / 2.0) - viewGapMm - (frontHeightMm / 2.0);
+                rightYmm = frontYmm;
+                layoutFound = true;
+                break;
+            }
+
+            if (layoutFound)
+                break;
+        }
+
+        if (!layoutFound)
+            throw new InvalidOperationException("Could not find a drawing sheet size and scale that fits the Torsion Bar views.");
+
+        // Try the SolidWorks document template first, then the configured template folders.
+        string defaultDrawingTemplate = string.Empty;
+        try
+        {
+            defaultDrawingTemplate = swApp.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplateDrawing) ?? string.Empty;
+        }
+        catch
+        {
+            defaultDrawingTemplate = string.Empty;
+        }
+
+        string drawingTemplatePath = string.Empty;
+        if (!string.IsNullOrWhiteSpace(part.DrawingTemplatePathOverride))
+        {
+            drawingTemplatePath = Path.GetFullPath(part.DrawingTemplatePathOverride);
+            if (!File.Exists(drawingTemplatePath))
+                throw new FileNotFoundException("The drawing template override file was not found.", drawingTemplatePath);
+        }
+        else if (!string.IsNullOrWhiteSpace(defaultDrawingTemplate) && File.Exists(defaultDrawingTemplate))
+        {
+            drawingTemplatePath = defaultDrawingTemplate;
+        }
+        else
+        {
+            string documentTemplateFolders = string.Empty;
+            try
+            {
+                documentTemplateFolders = swApp.GetUserPreferenceStringListValue((int)swUserPreferenceStringValue_e.swFileLocationsDocumentTemplates) ?? string.Empty;
+            }
+            catch
+            {
+                documentTemplateFolders = string.Empty;
+            }
+
+            char[] separators = { '|', ';', '\r', '\n' };
+            foreach (string rawFolder in documentTemplateFolders.Split(separators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (!Directory.Exists(rawFolder))
+                    continue;
+
+                string[] templates = Directory.GetFiles(rawFolder, "*.drwdot", SearchOption.TopDirectoryOnly);
+                if (templates.Length == 0)
+                    continue;
+
+                drawingTemplatePath = templates[0];
+                break;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(drawingTemplatePath))
+            throw new InvalidOperationException("Could not resolve a SolidWorks drawing document template. Set DrawingTemplatePathOverride or configure a default drawing template in SolidWorks.");
+
+        // Build the sheet-format search list:
+        // SolidWorks-configured folders first, then the Birr template folder on the part object.
+        string sheetFormatPath = string.Empty;
+        if (!string.IsNullOrWhiteSpace(part.DrawingSheetFormatPathOverride))
+        {
+            sheetFormatPath = Path.GetFullPath(part.DrawingSheetFormatPathOverride);
+            if (!File.Exists(sheetFormatPath))
+                throw new FileNotFoundException("The sheet-format override file was not found.", sheetFormatPath);
+        }
+        else
+        {
+            List<string> sheetFormatFolders = new();
+            char[] separators = { '|', ';', '\r', '\n' };
+
+            if (part.DrawingPreferSolidWorksTemplateLocations)
+            {
+                string configuredSheetFormatFolders = string.Empty;
+                string configuredNewSheetFormatFolders = string.Empty;
+
+                try
+                {
+                    configuredSheetFormatFolders = swApp.GetUserPreferenceStringListValue((int)swUserPreferenceStringValue_e.swFileLocationsSheetFormat) ?? string.Empty;
+                }
+                catch
+                {
+                    configuredSheetFormatFolders = string.Empty;
+                }
+
+                try
+                {
+                    configuredNewSheetFormatFolders = swApp.GetUserPreferenceStringListValue((int)swUserPreferenceStringValue_e.swFileLocationsNewSheetFormat) ?? string.Empty;
+                }
+                catch
+                {
+                    configuredNewSheetFormatFolders = string.Empty;
+                }
+
+                foreach (string rawFolder in configuredSheetFormatFolders.Split(separators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    if (Directory.Exists(rawFolder))
+                        sheetFormatFolders.Add(Path.GetFullPath(rawFolder));
+                }
+
+                foreach (string rawFolder in configuredNewSheetFormatFolders.Split(separators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    if (Directory.Exists(rawFolder))
+                        sheetFormatFolders.Add(Path.GetFullPath(rawFolder));
+                }
+
+                if (!string.IsNullOrWhiteSpace(defaultDrawingTemplate) && File.Exists(defaultDrawingTemplate))
+                {
+                    string templateFolder = Path.GetDirectoryName(defaultDrawingTemplate) ?? string.Empty;
+                    if (!string.IsNullOrWhiteSpace(templateFolder) && Directory.Exists(templateFolder))
+                        sheetFormatFolders.Add(Path.GetFullPath(templateFolder));
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(part.DrawingTemplateFolderPath) && Directory.Exists(part.DrawingTemplateFolderPath))
+                sheetFormatFolders.Add(Path.GetFullPath(part.DrawingTemplateFolderPath));
+
+            string expectedSheetFormatFileName = $"{paperCode}_Birr_Machines_{languageCode}.slddrt";
+            foreach (string folder in sheetFormatFolders)
+            {
+                string directPath = Path.Combine(folder, expectedSheetFormatFileName);
+                if (File.Exists(directPath))
+                {
+                    sheetFormatPath = directPath;
+                    break;
+                }
+
+                string[] recursiveMatches = Directory.GetFiles(folder, expectedSheetFormatFileName, SearchOption.AllDirectories);
+                if (recursiveMatches.Length > 0)
+                {
+                    sheetFormatPath = recursiveMatches[0];
+                    break;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(sheetFormatPath))
+                throw new FileNotFoundException($"Could not find sheet format '{expectedSheetFormatFileName}'. Check DrawingLanguageCode or DrawingTemplateFolderPath.");
+        }
+
+        ModelDoc2 drawingModel = (ModelDoc2)swApp.NewDocument(drawingTemplatePath, 0, 0, 0);
         if (drawingModel == null)
             throw new InvalidOperationException("Failed to create a new drawing document.");
 
         DrawingDoc drawingDoc = drawingModel as DrawingDoc;
         if (drawingDoc == null)
         {
-            _swApp.CloseDoc(drawingModel.GetTitle());
+            swApp.CloseDoc(drawingModel.GetTitle());
             throw new InvalidOperationException("Could not access the SolidWorks drawing document.");
         }
 
         try
         {
-            string sheetName = string.IsNullOrWhiteSpace(SheetName) ? "Sheet1" : SheetName;
+            string sheetName = string.IsNullOrWhiteSpace(part.DrawingSheetName) ? "Sheet1" : part.DrawingSheetName;
 
             bool sheetConfigured = drawingDoc.SetupSheet6(
                 sheetName,
-                (int)layout.Sheet.PaperSize,
+                (int)paperSize,
                 (int)swDwgTemplates_e.swDwgTemplateCustom,
-                layout.ScaleNumerator,
-                layout.ScaleDenominator,
-                UseFirstAngleProjection,
+                scaleNumerator,
+                scaleDenominator,
+                part.DrawingUseFirstAngleProjection,
                 sheetFormatPath,
-                Mm(layout.Sheet.WidthMm),
-                Mm(layout.Sheet.HeightMm),
+                Mm(sheetWidthMm),
+                Mm(sheetHeightMm),
                 string.Empty,
                 false,
                 0,
@@ -157,23 +287,39 @@ public sealed class TorsionBarDrawing
 
             drawingDoc.ActivateSheet(sheetName);
 
-            View frontView = drawingDoc.CreateDrawViewFromModelView3(partPath, "*Front", Mm(layout.FrontXmm), Mm(layout.FrontYmm), 0);
-            View topView = drawingDoc.CreateDrawViewFromModelView3(partPath, "*Top", Mm(layout.TopXmm), Mm(layout.TopYmm), 0);
-            View rightView = drawingDoc.CreateDrawViewFromModelView3(partPath, "*Right", Mm(layout.RightXmm), Mm(layout.RightYmm), 0);
+            View frontView = drawingDoc.CreateDrawViewFromModelView3(partPath, "*Front", Mm(frontXmm), Mm(frontYmm), 0);
+            View topView = drawingDoc.CreateDrawViewFromModelView3(partPath, "*Top", Mm(topXmm), Mm(topYmm), 0);
+            View rightView = drawingDoc.CreateDrawViewFromModelView3(partPath, "*Right", Mm(rightXmm), Mm(rightYmm), 0);
 
             if (frontView == null || topView == null || rightView == null)
                 throw new InvalidOperationException("Could not create the required drawing views.");
 
-            if (!string.IsNullOrWhiteSpace(ReferencedConfiguration))
+            if (!string.IsNullOrWhiteSpace(part.DrawingReferencedConfiguration))
             {
-                frontView.ReferencedConfiguration = ReferencedConfiguration;
-                topView.ReferencedConfiguration = ReferencedConfiguration;
-                rightView.ReferencedConfiguration = ReferencedConfiguration;
+                frontView.ReferencedConfiguration = part.DrawingReferencedConfiguration;
+                topView.ReferencedConfiguration = part.DrawingReferencedConfiguration;
+                rightView.ReferencedConfiguration = part.DrawingReferencedConfiguration;
             }
 
-            // Front view carries the hole pattern and overall length. Right view captures the thickness.
-            TryAutoDimensionView(drawingDoc, frontView.Name);
-            TryAutoDimensionView(drawingDoc, rightView.Name);
+            if (drawingDoc.ActivateView(frontView.Name))
+            {
+                drawingDoc.AutoDimension(
+                    (int)swAutodimEntities_e.swAutodimEntitiesAll,
+                    (int)swAutodimScheme_e.swAutodimSchemeBaseline,
+                    (int)swAutodimHorizontalPlacement_e.swAutodimHorizontalPlacementAbove,
+                    (int)swAutodimScheme_e.swAutodimSchemeBaseline,
+                    (int)swAutodimVerticalPlacement_e.swAutodimVerticalPlacementRight);
+            }
+
+            if (drawingDoc.ActivateView(rightView.Name))
+            {
+                drawingDoc.AutoDimension(
+                    (int)swAutodimEntities_e.swAutodimEntitiesAll,
+                    (int)swAutodimScheme_e.swAutodimSchemeBaseline,
+                    (int)swAutodimHorizontalPlacement_e.swAutodimHorizontalPlacementAbove,
+                    (int)swAutodimScheme_e.swAutodimSchemeBaseline,
+                    (int)swAutodimVerticalPlacement_e.swAutodimVerticalPlacementRight);
+            }
 
             drawingDoc.ActivateView(frontView.Name);
             drawingDoc.InsertModelAnnotations3(
@@ -192,21 +338,21 @@ public sealed class TorsionBarDrawing
             drawingModel.ViewZoomtofit2();
 
             string savedPath;
-            if (SaveToPdm)
+            if (part.DrawingSaveToPdm)
             {
-                savedPath = _pdm.SaveAsPdm(drawingModel, outFolder);
+                savedPath = pdm.SaveAsPdm(drawingModel, outFolder);
                 Console.WriteLine($"Drawing saved to PDM: {savedPath}");
             }
             else
             {
-                savedPath = Path.Combine(outFolder, GetRequiredLocalFileName());
+                savedPath = Path.Combine(outFolder, drawingFileName);
                 drawingModel.SaveAs3(savedPath, 0, 1);
                 Console.WriteLine($"Drawing saved locally: {savedPath}");
             }
 
-            if (CloseAfterCreate)
+            if (part.DrawingCloseAfterCreate)
             {
-                _swApp.CloseDoc(drawingModel.GetTitle());
+                swApp.CloseDoc(drawingModel.GetTitle());
                 Console.WriteLine("Drawing closed after creating.");
             }
 
@@ -214,211 +360,8 @@ public sealed class TorsionBarDrawing
         }
         catch
         {
-            _swApp.CloseDoc(drawingModel.GetTitle());
+            swApp.CloseDoc(drawingModel.GetTitle());
             throw;
         }
-
-        double Mm(double mm) => mm * MmToMeters;
-    }
-
-    private string ResolveDrawingTemplatePath()
-    {
-        if (!string.IsNullOrWhiteSpace(DrawingTemplatePathOverride))
-        {
-            string overridePath = Path.GetFullPath(DrawingTemplatePathOverride);
-            if (File.Exists(overridePath))
-                return overridePath;
-
-            throw new FileNotFoundException("The drawing template override file was not found.", overridePath);
-        }
-
-        string defaultTemplate = TryGetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplateDrawing);
-        if (!string.IsNullOrWhiteSpace(defaultTemplate) && File.Exists(defaultTemplate))
-            return defaultTemplate;
-
-        foreach (string folder in GetConfiguredSearchFolders((int)swUserPreferenceStringValue_e.swFileLocationsDocumentTemplates))
-        {
-            string[] templates = Directory.GetFiles(folder, "*.drwdot", SearchOption.TopDirectoryOnly);
-            if (templates.Length > 0)
-                return templates[0];
-        }
-
-        throw new InvalidOperationException("Could not resolve a SolidWorks drawing document template. Set DrawingTemplatePathOverride or configure a default drawing template in SolidWorks.");
-    }
-
-    private string ResolveSheetFormatPath(string paperCode)
-    {
-        if (!string.IsNullOrWhiteSpace(SheetFormatPathOverride))
-        {
-            string overridePath = Path.GetFullPath(SheetFormatPathOverride);
-            if (File.Exists(overridePath))
-                return overridePath;
-
-            throw new FileNotFoundException("The sheet-format override file was not found.", overridePath);
-        }
-
-        string normalizedLanguageCode = NormalizeLanguageCode();
-        string expectedFileName = $"{paperCode}_Birr_Machines_{normalizedLanguageCode}.slddrt";
-
-        foreach (string folder in GetSheetFormatSearchFolders())
-        {
-            string directPath = Path.Combine(folder, expectedFileName);
-            if (File.Exists(directPath))
-                return directPath;
-
-            string[] recursiveMatches = Directory.GetFiles(folder, expectedFileName, SearchOption.AllDirectories);
-            if (recursiveMatches.Length > 0)
-                return recursiveMatches[0];
-        }
-
-        throw new FileNotFoundException($"Could not find sheet format '{expectedFileName}'. Check LanguageCode or TemplateFolderPath.");
-    }
-
-    private IEnumerable<string> GetSheetFormatSearchFolders()
-    {
-        HashSet<string> folders = new(StringComparer.OrdinalIgnoreCase);
-
-        if (PreferSolidWorksTemplateLocations)
-        {
-            foreach (string folder in GetConfiguredSearchFolders((int)swUserPreferenceStringValue_e.swFileLocationsSheetFormat))
-                folders.Add(folder);
-
-            foreach (string folder in GetConfiguredSearchFolders((int)swUserPreferenceStringValue_e.swFileLocationsNewSheetFormat))
-                folders.Add(folder);
-
-            string defaultDrawingTemplate = TryGetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplateDrawing);
-            if (!string.IsNullOrWhiteSpace(defaultDrawingTemplate) && File.Exists(defaultDrawingTemplate))
-            {
-                string templateFolder = Path.GetDirectoryName(defaultDrawingTemplate) ?? string.Empty;
-                if (!string.IsNullOrWhiteSpace(templateFolder) && Directory.Exists(templateFolder))
-                    folders.Add(templateFolder);
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(TemplateFolderPath) && Directory.Exists(TemplateFolderPath))
-            folders.Add(Path.GetFullPath(TemplateFolderPath));
-
-        return folders;
-    }
-
-    private IEnumerable<string> GetConfiguredSearchFolders(int preferenceId)
-    {
-        string configuredFolderList = TryGetUserPreferenceStringListValue(preferenceId);
-        if (string.IsNullOrWhiteSpace(configuredFolderList))
-            yield break;
-
-        char[] separators = { '|', ';', '\r', '\n' };
-        foreach (string rawFolder in configuredFolderList.Split(separators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            if (Directory.Exists(rawFolder))
-                yield return rawFolder;
-        }
-    }
-
-    private string TryGetUserPreferenceStringValue(int preferenceId)
-    {
-        try
-        {
-            return _swApp.GetUserPreferenceStringValue(preferenceId) ?? string.Empty;
-        }
-        catch
-        {
-            return string.Empty;
-        }
-    }
-
-    private string TryGetUserPreferenceStringListValue(int preferenceId)
-    {
-        try
-        {
-            return _swApp.GetUserPreferenceStringListValue(preferenceId) ?? string.Empty;
-        }
-        catch
-        {
-            return string.Empty;
-        }
-    }
-
-    private string NormalizeLanguageCode()
-    {
-        string normalized = (LanguageCode ?? string.Empty).Trim().ToUpperInvariant();
-        if (normalized == "EN" || normalized == "DE")
-            return normalized;
-
-        throw new InvalidOperationException("TorsionBarDrawing.LanguageCode must be either EN or DE.");
-    }
-
-    private void TryAutoDimensionView(DrawingDoc drawingDoc, string viewName)
-    {
-        if (string.IsNullOrWhiteSpace(viewName))
-            return;
-
-        if (!drawingDoc.ActivateView(viewName))
-            return;
-
-        int autoDimensionStatus = drawingDoc.AutoDimension(
-            (int)swAutodimEntities_e.swAutodimEntitiesAll,
-            (int)swAutodimScheme_e.swAutodimSchemeBaseline,
-            (int)swAutodimHorizontalPlacement_e.swAutodimHorizontalPlacementAbove,
-            (int)swAutodimScheme_e.swAutodimSchemeBaseline,
-            (int)swAutodimVerticalPlacement_e.swAutodimVerticalPlacementRight);
-
-        Console.WriteLine($"Auto-dimension status for {viewName}: {autoDimensionStatus}");
-    }
-
-    private LayoutPlan BuildLayoutPlan(TorsionBarPart part)
-    {
-        SheetOption[] sheets =
-        {
-            new("A4", swDwgPaperSizes_e.swDwgPaperA4size, 297.0, 210.0),
-            new("A3", swDwgPaperSizes_e.swDwgPaperA3size, 420.0, 297.0),
-            new("A2", swDwgPaperSizes_e.swDwgPaperA2size, 594.0, 420.0),
-            new("A1", swDwgPaperSizes_e.swDwgPaperA1size, 841.0, 594.0)
-        };
-
-        double[] scaleDenominators = { 1.0, 2.0, 3.0, 4.0, 5.0, 10.0 };
-        const double sideMarginMm = 20.0;
-        const double topMarginMm = 20.0;
-        const double viewGapMm = 18.0;
-        const double rightViewReserveMm = 45.0;
-        double bottomTitleBlockClearanceMm = Math.Max(0.0, BottomTitleBlockClearanceMm);
-
-        foreach (SheetOption sheet in sheets)
-        {
-            foreach (double scaleDenominator in scaleDenominators)
-            {
-                double scale = 1.0 / scaleDenominator;
-                double frontWidthMm = part.BarLengthMm * scale;
-                double frontHeightMm = part.BarHeightMm * scale;
-                double topHeightMm = part.BarThicknessMm * scale;
-                double rightWidthMm = part.BarThicknessMm * scale;
-                double rightHeightMm = part.BarHeightMm * scale;
-                double totalWidthMm = sideMarginMm + frontWidthMm + viewGapMm + Math.Max(rightWidthMm, rightViewReserveMm) + sideMarginMm;
-                double totalHeightMm = bottomTitleBlockClearanceMm + topHeightMm + viewGapMm + Math.Max(frontHeightMm, rightHeightMm) + topMarginMm;
-
-                if (totalWidthMm > sheet.WidthMm || totalHeightMm > sheet.HeightMm)
-                    continue;
-
-                double frontXmm = sideMarginMm + (frontWidthMm / 2.0);
-                double topXmm = frontXmm;
-                double rightXmm = sideMarginMm + frontWidthMm + viewGapMm + (rightWidthMm / 2.0);
-                double topYmm = sheet.HeightMm - topMarginMm - (topHeightMm / 2.0);
-                double frontYmm = topYmm - (topHeightMm / 2.0) - viewGapMm - (frontHeightMm / 2.0);
-                double rightYmm = frontYmm;
-
-                return new LayoutPlan(
-                    sheet,
-                    1.0,
-                    scaleDenominator,
-                    frontXmm,
-                    frontYmm,
-                    topXmm,
-                    topYmm,
-                    rightXmm,
-                    rightYmm);
-            }
-        }
-
-        throw new InvalidOperationException("Could not find a drawing sheet size and scale that fits the Torsion Bar views.");
     }
 }

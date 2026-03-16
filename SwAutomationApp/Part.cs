@@ -1913,6 +1913,7 @@ public sealed class StatorEndSheetPart
 public sealed class TorsionBarPart
 {
     private const double MmToMeters = AutomationSupport.MmToMeters;
+    private const string DefaultDrawingTemplateFolderPath = @"C:\Users\kareem.salah\PDM\Birr Machines PDM\40_Templates\Solidworks\Blattformate\Birr Machines";
     private readonly SldWorks _swApp;
     private readonly PdmModule _pdm;
 
@@ -1944,11 +1945,36 @@ public sealed class TorsionBarPart
     public string P0002ConfigName { get; set; } = "P0002";
     public string MaterialName { get; set; } = "AISI 1020";
 
+    // Drawing settings stay on the part object for the same reason the 3D settings do:
+    // this class is the single source of truth for everything related to the torsion bar.
+    // drawing.cs will read these values, but it does not own them.
+    public string DrawingOutputFolder { get; set; } = string.Empty;
+    public bool DrawingCloseAfterCreate { get; set; }
+    public bool DrawingSaveToPdm { get; set; }
+    public string DrawingLocalFileName { get; set; } = "TorsionBar.SLDDRW";
+    public string DrawingSheetName { get; set; } = "Torsion Bar";
+    public string DrawingLanguageCode { get; set; } = "EN";
+    public string DrawingTemplateFolderPath { get; set; } = DefaultDrawingTemplateFolderPath;
+    public bool DrawingPreferSolidWorksTemplateLocations { get; set; } = true;
+    public string DrawingSheetFormatPathOverride { get; set; } = string.Empty;
+    public string DrawingTemplatePathOverride { get; set; } = string.Empty;
+    public bool DrawingUseFirstAngleProjection { get; set; }
+    public double DrawingBottomTitleBlockClearanceMm { get; set; } = 85.0;
+    public string DrawingReferencedConfiguration { get; set; } = "P0002";
+
     private string GetRequiredOutputFolder() => AutomationSupport.RequireText(OutputFolder, nameof(OutputFolder), nameof(TorsionBarPart));
     private string GetRequiredLocalFileName() => AutomationSupport.RequireText(LocalFileName, nameof(LocalFileName), nameof(TorsionBarPart));
     private AutomationUiScope BeginAutomationUiSuppression() => new(_swApp);
 
+    // These are the two public entry points for this part.
+    // CreatePart() only builds the 3D part document.
+    // Create() builds the 3D part first, then calls the drawing method in drawing.cs.
     public string Create()
+    {
+        return DrawingMethods.CreateTorsionBarDrawing(this, _swApp, _pdm);
+    }
+
+    public string CreatePart()
     {
         double Mm(double mm) => mm * MmToMeters;
         using var automationUi = BeginAutomationUiSuppression();

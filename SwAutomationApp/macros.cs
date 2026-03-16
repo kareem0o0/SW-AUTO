@@ -267,7 +267,7 @@ public static class Project1
         string statorSheetPath = statorSheet.Create();
         string statorDistanceSheetPath = statorDistanceSheet.Create();
         string statorEndSheetPath = statorEndSheet.Create();
-        string torsionBarPath = torsionBar.Create();
+        string torsionBarPath = torsionBar.CreatePart();
         string pressPlatePath = pressPlate.Create();
         string pressRingNdePath = pressRingNde.Create();
         string machinePath = machine.Create();
@@ -368,7 +368,10 @@ public static class Project1
         if (string.IsNullOrWhiteSpace(outFolder))
             throw new ArgumentException("Output folder is required.", nameof(outFolder));
 
-        // Create and configure the actual part object first.
+        // This is the object you edit.
+        // It owns everything for the torsion bar:
+        // 1. the 3D model parameters
+        // 2. the 2D drawing parameters
         TorsionBarPart torsionBar = new TorsionBarPart(swApp, pdm);
         torsionBar.OutputFolder = outFolder;
         torsionBar.SaveToPdm = false;
@@ -391,21 +394,28 @@ public static class Project1
         torsionBar.P0002ConfigName = "P0002";
         torsionBar.MaterialName = "AISI 1020";
 
-        // The drawing object only carries drawing-specific settings and uses the existing part object.
-        TorsionBarDrawing torsionBarDrawing = new TorsionBarDrawing(swApp, pdm);
-        torsionBarDrawing.Part = torsionBar;
-        torsionBarDrawing.OutputFolder = outFolder;
-        torsionBarDrawing.SaveToPdm = false;
-        torsionBarDrawing.CloseAfterCreate = false;
-        torsionBarDrawing.LocalFileName = "TorsionBar.SLDDRW";
-        torsionBarDrawing.SheetName = "Torsion Bar";
-        torsionBarDrawing.LanguageCode = "EN";
-        torsionBarDrawing.TemplateFolderPath = @"C:\Users\kareem.salah\PDM\Birr Machines PDM\40_Templates\Solidworks\Blattformate\Birr Machines";
-        torsionBarDrawing.BottomTitleBlockClearanceMm = 85.0;
-        torsionBarDrawing.ReferencedConfiguration = "P0002";
+        // These are drawing-only settings.
+        // They live on the same part object so you can configure everything in one place,
+        // but the actual drawing work is still implemented in drawing.cs.
+        torsionBar.DrawingOutputFolder = outFolder;
+        torsionBar.DrawingSaveToPdm = false;
+        // false = leave the drawing open after Create(); true = close it after saving
+        torsionBar.DrawingCloseAfterCreate = false;
+        torsionBar.DrawingLocalFileName = "TorsionBar.SLDDRW";
+        torsionBar.DrawingSheetName = "Torsion Bar";
+        torsionBar.DrawingLanguageCode = "EN";
+        torsionBar.DrawingTemplateFolderPath = @"C:\Users\kareem.salah\PDM\Birr Machines PDM\40_Templates\Solidworks\Blattformate\Birr Machines";
+        torsionBar.DrawingBottomTitleBlockClearanceMm = 85.0;
+        torsionBar.DrawingReferencedConfiguration = "P0002";
 
-        // One Create call now reuses the existing part class, then handles only the drawing work.
-        string drawingPath = torsionBarDrawing.Create();
+        // Call the combined entry point on the part.
+        // Internally:
+        // torsionBar.Create()
+        // -> creates the 3D part by calling CreatePart()
+        // -> calls the torsion-bar drawing method in drawing.cs
+        // -> passes this torsionBar object into that method
+        // -> drawing.cs generates the drawing from the current part data
+        string drawingPath = torsionBar.Create();
         Console.WriteLine($"Run5 completed. Drawing: {drawingPath}");
     }
 }
