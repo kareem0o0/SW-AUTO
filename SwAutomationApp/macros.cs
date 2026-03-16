@@ -15,13 +15,13 @@ public static class Project1
             groundOffset: -250.0,
             outFolder: outFolder,
             closeAfterCreate: true,
-            SaveToPdm: true);
+            SaveToPdm: false);
 
         // 2) Create assemblies (capture real vaulted file names)
-        string rotor = assembly.CreateAssembly(outFolder, "RotorComplete.SLDASM", closeAfterCreate: true, SaveToPdm: true);
-        string stator = assembly.CreateAssembly(outFolder, "StatorComplete.SLDASM", closeAfterCreate: true, SaveToPdm: true);
-        string housing = assembly.CreateAssembly(outFolder, "HousingMachined.SLDASM", closeAfterCreate: true, SaveToPdm: true);
-        string machine = assembly.CreateAssembly(outFolder, "MachineAssembly.SLDASM", closeAfterCreate: false, SaveToPdm: true);
+        string rotor = assembly.CreateAssembly(outFolder, "RotorComplete.SLDASM", closeAfterCreate: true, SaveToPdm: false);
+        string stator = assembly.CreateAssembly(outFolder, "StatorComplete.SLDASM", closeAfterCreate: true, SaveToPdm: false);
+        string housing = assembly.CreateAssembly(outFolder, "HousingMachined.SLDASM", closeAfterCreate: true, SaveToPdm: false);
+        string machine = assembly.CreateAssembly(outFolder, "MachineAssembly.SLDASM", closeAfterCreate: false, SaveToPdm: false);
 
         // 3) Insert and mate components into the open machine assembly
         Component2 inserted = assembly.InsertComponentToOpenAssembly(skeleton);
