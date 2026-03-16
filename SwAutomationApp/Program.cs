@@ -16,9 +16,9 @@ public static class Program
         SldWorks swApp = new SldWorks();
         swApp.Visible = true;
 
-        var pdm = new PdmModule();
+        PdmModule pdm = new PdmModule();
         string localOutputFolder = @"C:\Users\kareem.salah\Downloads\birr machines\birr machines\parts";
 
-        Project1.Run4(localOutputFolder, swApp, pdm);
+        Project1.Run5(localOutputFolder, swApp, pdm);
     }
 }

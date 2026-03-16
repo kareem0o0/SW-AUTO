@@ -113,6 +113,7 @@ public static class Project1
             throw new ArgumentException("Output folder is required.", nameof(outFolder));
 
         // These objects are the editable parameter surface for the machine build.
+        // Skeleton planes and axes act as the assembly reference frame.
         SkeletonPart skeleton = new SkeletonPart(swApp, pdm);
         skeleton.OutputFolder = outFolder;
         skeleton.SaveToPdm = false;
@@ -121,6 +122,7 @@ public static class Project1
         skeleton.SideOffsetMm = 2000.0;
         skeleton.GroundOffsetMm = -500.0;
 
+        // Main stator lamination used as the thick core pack.
         StatorSheetPart statorSheet = new StatorSheetPart(swApp, pdm);
         statorSheet.OutputFolder = outFolder;
         statorSheet.SaveToPdm = false;
@@ -139,6 +141,7 @@ public static class Project1
         statorSheet.SlotPatternCount = 60;
         statorSheet.MaterialName = "AISI 1020";
 
+        // Distance sheets add the repeated spacer/boss geometry between stator packs.
         StatorDistanceSheetPart statorDistanceSheet = new StatorDistanceSheetPart(swApp, pdm);
         statorDistanceSheet.OutputFolder = outFolder;
         statorDistanceSheet.SaveToPdm = false;
@@ -164,6 +167,7 @@ public static class Project1
         statorDistanceSheet.SlotPatternCount = 60;
         statorDistanceSheet.MaterialName = "AISI 1020";
 
+        // End sheets cap the repeated lamination stack at each side.
         StatorEndSheetPart statorEndSheet = new StatorEndSheetPart(swApp, pdm);
         statorEndSheet.OutputFolder = outFolder;
         statorEndSheet.SaveToPdm = false;
@@ -178,6 +182,7 @@ public static class Project1
         statorEndSheet.SlotPatternCount = 60;
         statorEndSheet.MaterialName = "AISI 1020";
 
+        // Torsion bars are created once and then patterned around the finished stack.
         TorsionBarPart torsionBar = new TorsionBarPart(swApp, pdm);
         torsionBar.OutputFolder = outFolder;
         torsionBar.SaveToPdm = false;
@@ -200,6 +205,7 @@ public static class Project1
         torsionBar.P0002ConfigName = "P0002";
         torsionBar.MaterialName = "AISI 1020";
 
+        // Press plates clamp the stack and also carry the assembly placement angle.
         PressPlatePart pressPlate = new PressPlatePart(swApp, pdm);
         pressPlate.OutputFolder = outFolder;
         pressPlate.SaveToPdm = false;
@@ -216,6 +222,7 @@ public static class Project1
         pressPlate.AssemblyAngleDeg = 3.0;
         pressPlate.MaterialName = "AISI 1020";
 
+        // The NDE press ring is the first and last hardware item in the axial stack.
         StatorPressringNdePart pressRingNde = new StatorPressringNdePart(swApp, pdm);
         pressRingNde.OutputFolder = outFolder;
         pressRingNde.SaveToPdm = false;
@@ -235,6 +242,7 @@ public static class Project1
         pressRingNde.PocketCount = 8;
         pressRingNde.MaterialName = "AISI 1020";
 
+        // This is the target assembly document that all generated parts are inserted into.
         AssemblyFile machine = new AssemblyFile(swApp, pdm);
         machine.OutputFolder = outFolder;
         machine.SaveToPdm = false;
@@ -323,6 +331,7 @@ public static class Project1
             repeatedEndSeed,
             repeatedStatorSeed);
 
+        // Close the far end with the same hardware sequence used at the start.
         stackOffsetMm += repeatedDistanceEndSheetPacks * repeatedStackBlockThicknessMm;
 
         insertedStackComponent = machine.Insert(statorEndSheetPath);
@@ -352,5 +361,51 @@ public static class Project1
         machine.CircularPattern(insertedSkeleton, "X-Achse", torsionBarPatternCount, 2 * Math.PI, insertedTorsionBar);
 
         Console.WriteLine($"Macro completed. Machine assembly: {machinePath}");
+    }
+
+    public static void Run5(string outFolder, SldWorks swApp, PdmModule pdm)
+    {
+        if (string.IsNullOrWhiteSpace(outFolder))
+            throw new ArgumentException("Output folder is required.", nameof(outFolder));
+
+        // Create and configure the actual part object first.
+        TorsionBarPart torsionBar = new TorsionBarPart(swApp, pdm);
+        torsionBar.OutputFolder = outFolder;
+        torsionBar.SaveToPdm = false;
+        torsionBar.CloseAfterCreate = true;
+        torsionBar.LocalFileName = "TorsionBar.SLDPRT";
+        torsionBar.BarLengthMm = 1074.0;
+        torsionBar.BarHeightMm = 40.0;
+        torsionBar.BarThicknessMm = 30.0;
+        torsionBar.HoleCenterlineOffsetFromBottomMm = 20.0;
+        torsionBar.OuterHoleEndOffsetMm = 30.0;
+        torsionBar.HolePairSpacingMm = 315.0;
+        torsionBar.OuterHoleDiameterMm = 10.0;
+        torsionBar.InnerHoleDiameterMm = 16.0;
+        torsionBar.CenterHoleDiameterMm = 16.0;
+        torsionBar.OuterTapSizePrimary = "M10x1.5";
+        torsionBar.OuterTapSizeFallback = "M10";
+        torsionBar.InnerTapSizePrimary = "M16x2";
+        torsionBar.InnerTapSizeFallback = "M16";
+        torsionBar.P0001ConfigName = "P0001";
+        torsionBar.P0002ConfigName = "P0002";
+        torsionBar.MaterialName = "AISI 1020";
+
+        // The drawing object only carries drawing-specific settings and uses the existing part object.
+        TorsionBarDrawing torsionBarDrawing = new TorsionBarDrawing(swApp, pdm);
+        torsionBarDrawing.Part = torsionBar;
+        torsionBarDrawing.OutputFolder = outFolder;
+        torsionBarDrawing.SaveToPdm = false;
+        torsionBarDrawing.CloseAfterCreate = false;
+        torsionBarDrawing.LocalFileName = "TorsionBar.SLDDRW";
+        torsionBarDrawing.SheetName = "Torsion Bar";
+        torsionBarDrawing.LanguageCode = "EN";
+        torsionBarDrawing.TemplateFolderPath = @"C:\Users\kareem.salah\PDM\Birr Machines PDM\40_Templates\Solidworks\Blattformate\Birr Machines";
+        torsionBarDrawing.BottomTitleBlockClearanceMm = 85.0;
+        torsionBarDrawing.ReferencedConfiguration = "P0002";
+
+        // One Create call now reuses the existing part class, then handles only the drawing work.
+        string drawingPath = torsionBarDrawing.Create();
+        Console.WriteLine($"Run5 completed. Drawing: {drawingPath}");
     }
 }
