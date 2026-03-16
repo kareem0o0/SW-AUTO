@@ -580,7 +580,7 @@ public sealed class SkeletonPart
     }
 
     public string OutputFolder { get; set; } = string.Empty;
-    public bool CloseAfterCreate { get; set; }
+    public bool CloseAfterCreate { get; set; } = false;
     public bool SaveToPdm { get; set; }
     public string LocalFileName { get; set; } = "skeleton.SLDPRT";
 
