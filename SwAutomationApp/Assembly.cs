@@ -6,28 +6,40 @@ using SwAutomation.Pdm;
 
 namespace SwAutomation;
 
-public sealed class Assembly
+public abstract class AssemblyDefinitionBase : AutomationDocumentBase
 {
-    private readonly SldWorks _swApp;
-    private readonly PdmModule _pdm;
-    private ModelDoc2 _model = null;
-    private AssemblyDoc _assembly = null;
-    private string _folder = string.Empty;
-    private int _insertIndex = 0;
-    private Component2 swComponent = null;
-    public Assembly(SldWorks swApp, PdmModule pdm)
+    protected ModelDoc2 _model = null;
+    protected AssemblyDoc _assembly = null;
+    protected string _folder = string.Empty;
+    protected int _insertIndex = 0;
+    protected Component2 _lastInsertedComponent = null;
+
+    protected AssemblyDefinitionBase(SldWorks swApp, PdmModule pdm, string fileName)
+        : base(swApp, pdm)
     {
-        _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
-        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
+        FileName = fileName ?? throw new ArgumentNullException(nameof(fileName));
     }
 
-    public string CreateAssembly(string outFolder, string fileName = "Assembly.SLDASM", bool closeAfterCreate = false, bool SaveToPdm = false)
+    public string FileName { get; set; }
+
+    protected string GetRequiredFileName()
     {
+        if (string.IsNullOrWhiteSpace(FileName))
+            throw new InvalidOperationException($"{GetType().Name} requires a non-empty {nameof(FileName)} value.");
+
+        return FileName;
+    }
+
+    protected string CreateAssemblyDocument(bool closeAfterCreate)
+    {
+        string outFolder = GetRequiredOutputFolder();
+        string fileName = GetRequiredFileName();
+        bool saveToPdm = SaveToPdm;
         Directory.CreateDirectory(outFolder);
         string template = _swApp.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplateAssembly);
         ModelDoc2 model = (ModelDoc2)_swApp.NewDocument(template, 0, 0, 0);
         string fullPath;
-        if (SaveToPdm)
+        if (saveToPdm)
         {
             fullPath = _pdm.SaveAsPdm(model, outFolder);
         }
@@ -46,7 +58,7 @@ public sealed class Assembly
             _model = null;
             _assembly = null;
             _folder = string.Empty;
-            swComponent = null;
+            _lastInsertedComponent = null;
             Console.WriteLine("Assembly closed after creating.");
             return Path.GetFileName(fullPath);
         }
@@ -59,6 +71,19 @@ public sealed class Assembly
         _swApp.ActivateDoc3(_model.GetTitle(), false, (int)swRebuildOnActivation_e.swDontRebuildActiveDoc, ref activateErrors);
         Console.WriteLine("Assembly remains open for further operations.");
         return Path.GetFileName(fullPath);
+    }
+
+    public void CloseOpenAssembly()
+    {
+        if (_model == null)
+            return;
+
+        _swApp.CloseDoc(_model.GetTitle());
+        _model = null;
+        _assembly = null;
+        _folder = string.Empty;
+        _insertIndex = 0;
+        _lastInsertedComponent = null;
     }
 
     public Component2 InsertComponentToOpenAssembly(string componentPath)
@@ -103,7 +128,7 @@ public sealed class Assembly
         ref activateErrors);
 
     // Insert component
-    swComponent = _assembly.AddComponent5(
+    _lastInsertedComponent = _assembly.AddComponent5(
         path,
         (int)swAddComponentConfigOptions_e.swAddComponentConfigOptions_CurrentSelectedConfig,
         string.Empty,
@@ -113,12 +138,12 @@ public sealed class Assembly
         0.0,
         0.0);
 
-    if (swComponent == null)
+    if (_lastInsertedComponent == null)
         throw new Exception("Failed to insert component into assembly: " + path);
 
     _insertIndex++;
     _model.ClearSelection2(true);
-    swComponent.Select2(false, 0);
+    _lastInsertedComponent.Select2(false, 0);
 
     _assembly.UnfixComponent();
     
@@ -126,7 +151,7 @@ public sealed class Assembly
     if (openedModel != null) _swApp.CloseDoc(openedModel.GetTitle());
 
     Console.WriteLine($"Inserted component: {path}");
-    return swComponent;
+    return _lastInsertedComponent;
 }
 
 private static bool IsPlaneReference(string referenceName)
@@ -165,7 +190,7 @@ private bool SelectReferenceGeneric(ModelDocExtension swExt, Component2 comp, st
     return swExt.SelectByID2(selectionToken, selType, 0, 0, 0, append, 0, null, 0);
 }
 
-public void mate_plans(Component2 insertedComponent)
+public void MatePlanes(Component2 insertedComponent)
 {
     if (_model == null || _assembly == null)
         throw new InvalidOperationException("No open assembly.");
@@ -236,7 +261,7 @@ public void mate_plans(Component2 insertedComponent)
 
     _model.EditRebuild3();
 }
-public void ApplyCoincedentMate(Component2 comp1, string ref1, Component2 comp2, string ref2, double offset = 0, bool flipAlignment = false)
+public void ApplyCoincidentMate(Component2 comp1, string ref1, Component2 comp2, string ref2, double offset = 0, bool flipAlignment = false)
 {
     if (_model == null || _assembly == null)
         throw new InvalidOperationException("No open assembly.");
@@ -379,7 +404,7 @@ public void ApplyParallelMate(Component2 comp1, string ref1, Component2 comp2, s
     _model.EditRebuild3(); // Rebuild to apply changes
 }
 
-public void ApplyCoincedentAxisMate(Component2 comp1, Component2 comp2)
+public void ApplyCoincidentAxisMate(Component2 comp1, Component2 comp2)
 {
     if (_model == null || _assembly == null)
         throw new InvalidOperationException("No open assembly.");
@@ -387,7 +412,7 @@ public void ApplyCoincedentAxisMate(Component2 comp1, Component2 comp2)
     string[] axes = { "X-Achse", "Y-Achse", "Z-Achse" };
     foreach (string axis in axes)
     {
-        ApplyCoincedentMate(comp1, axis, comp2, axis);
+        ApplyCoincidentMate(comp1, axis, comp2, axis);
     }
 }
 
@@ -616,5 +641,178 @@ public Feature CreateCircularComponentPattern(Component2 axisOwner, string axisR
         return count;
     }
 }
+}
 
+public sealed class AssemblyDocumentDefinition : AssemblyDefinitionBase
+{
+    public AssemblyDocumentDefinition(SldWorks swApp, PdmModule pdm, string fileName = "Assembly.SLDASM")
+        : base(swApp, pdm, fileName)
+    {
+    }
+
+    public override string Create() => CreateAssemblyDocument(CloseAfterCreate);
+}
+
+public sealed class MachineAssemblyDefinition : AssemblyDefinitionBase
+{
+    public MachineAssemblyDefinition(SldWorks swApp, PdmModule pdm)
+        : base(swApp, pdm, "MachineAssembly.SLDASM")
+    {
+        Skeleton = new SkeletonPart(swApp, pdm)
+        {
+            SideOffsetMm = 2000.0,
+            GroundOffsetMm = -500.0,
+            CloseAfterCreate = true
+        };
+        StatorSheet = new StatorSheetPart(swApp, pdm);
+        StatorDistanceSheet = new StatorDistanceSheetPart(swApp, pdm);
+        StatorEndSheet = new StatorEndSheetPart(swApp, pdm);
+        TorsionBar = new TorsionBarPart(swApp, pdm);
+        PressPlate = new PressPlatePart(swApp, pdm);
+        PressRingNde = new StatorPressringNdePart(swApp, pdm);
+    }
+
+    public int RepeatedDistanceEndSheetPacks { get; set; } = 5;
+    public double PressPlateAngleDeg { get; set; } = 3.0;
+
+    public SkeletonPart Skeleton { get; }
+    public StatorSheetPart StatorSheet { get; }
+    public StatorDistanceSheetPart StatorDistanceSheet { get; }
+    public StatorEndSheetPart StatorEndSheet { get; }
+    public TorsionBarPart TorsionBar { get; }
+    public PressPlatePart PressPlate { get; }
+    public StatorPressringNdePart PressRingNde { get; }
+
+    public override string Create()
+    {
+        string outFolder = GetRequiredOutputFolder();
+        ApplyChildDefaults(Skeleton, outFolder);
+        ApplyChildDefaults(StatorSheet, outFolder);
+        ApplyChildDefaults(StatorDistanceSheet, outFolder);
+        ApplyChildDefaults(StatorEndSheet, outFolder);
+        ApplyChildDefaults(TorsionBar, outFolder);
+        ApplyChildDefaults(PressPlate, outFolder);
+        ApplyChildDefaults(PressRingNde, outFolder);
+
+        double Mm(double mm) => mm / 1000.0;
+
+        double statorSheetPackThicknessMm = StatorSheet.PlateThicknessMm;
+        double statorDistanceSheetStackThicknessMm = StatorDistanceSheet.PlateThicknessMm + StatorDistanceSheet.BossExtrusionDepthMm;
+        double statorEndSheetStackThicknessMm = StatorEndSheet.PlateThicknessMm;
+        double pressPlateStackThicknessMm = Math.Max(PressPlate.PlateBodyThicknessMm, PressPlate.RingThicknessMm);
+        double pressRingNdeStackThicknessMm = PressRingNde.RingThicknessMm;
+        double repeatedStackBlockThicknessMm =
+            statorDistanceSheetStackThicknessMm + statorEndSheetStackThicknessMm + statorSheetPackThicknessMm;
+        double torsionBarSlotRadiusMm = PressRingNde.PocketCenterRadiusMm;
+        int torsionBarPatternCount = PressRingNde.PocketCount;
+
+        string skeleton = Skeleton.Create();
+        string statorSheet = StatorSheet.Create();
+        string statorDistanceSheet = StatorDistanceSheet.Create();
+        string statorEndSheet = StatorEndSheet.Create();
+        string tensionBar = TorsionBar.Create();
+        string pressPlate = PressPlate.Create();
+        string pressRingNde = PressRingNde.Create();
+
+        bool requestedClose = CloseAfterCreate;
+        string machine = CreateAssemblyDocument(false);
+        Component2 insertedSkeleton = InsertComponentToOpenAssembly(skeleton);
+        MatePlanes(insertedSkeleton);
+
+        double stackOffsetMm = 0.0;
+        Component2 insertedStackComponent;
+
+        insertedStackComponent = InsertComponentToOpenAssembly(pressRingNde);
+        ApplyCoincidentMate(insertedSkeleton, "X-Achse", insertedStackComponent, "Z-Achse");
+        ApplyCoincidentMate(insertedSkeleton, "Ebene vorne", insertedStackComponent, "Ebene rechts");
+        ApplyCoincidentMate(insertedSkeleton, "Ebene rechts", insertedStackComponent, "Ebene vorne", Mm(stackOffsetMm));
+        stackOffsetMm += pressRingNdeStackThicknessMm;
+
+        insertedStackComponent = InsertComponentToOpenAssembly(pressPlate);
+        ApplyCoincidentMate(insertedSkeleton, "X-Achse", insertedStackComponent, "Z-Achse");
+        ApplyAngleMate(insertedSkeleton, "Ebene vorne", insertedStackComponent, "Ebene rechts", PressPlateAngleDeg);
+        ApplyCoincidentMate(insertedSkeleton, "Ebene rechts", insertedStackComponent, "Ebene vorne", Mm(stackOffsetMm));
+        stackOffsetMm += pressPlateStackThicknessMm;
+
+        insertedStackComponent = InsertComponentToOpenAssembly(statorEndSheet);
+        ApplyCoincidentMate(insertedSkeleton, "X-Achse", insertedStackComponent, "Z-Achse");
+        ApplyCoincidentMate(insertedSkeleton, "Ebene vorne", insertedStackComponent, "Ebene rechts");
+        ApplyCoincidentMate(insertedSkeleton, "Ebene rechts", insertedStackComponent, "Ebene vorne", Mm(stackOffsetMm));
+        stackOffsetMm += statorEndSheetStackThicknessMm;
+
+        insertedStackComponent = InsertComponentToOpenAssembly(statorSheet);
+        ApplyCoincidentMate(insertedSkeleton, "X-Achse", insertedStackComponent, "Z-Achse");
+        ApplyCoincidentMate(insertedSkeleton, "Ebene vorne", insertedStackComponent, "Ebene rechts");
+        ApplyCoincidentMate(insertedSkeleton, "Ebene rechts", insertedStackComponent, "Ebene vorne", Mm(stackOffsetMm));
+        stackOffsetMm += statorSheetPackThicknessMm;
+
+        Component2 repeatedDistanceSeed = InsertComponentToOpenAssembly(statorDistanceSheet);
+        ApplyCoincidentMate(insertedSkeleton, "X-Achse", repeatedDistanceSeed, "Z-Achse");
+        ApplyCoincidentMate(insertedSkeleton, "Ebene vorne", repeatedDistanceSeed, "Ebene rechts");
+        ApplyCoincidentMate(insertedSkeleton, "Ebene rechts", repeatedDistanceSeed, "Ebene vorne", Mm(stackOffsetMm));
+        stackOffsetMm += statorDistanceSheetStackThicknessMm;
+
+        Component2 repeatedEndSeed = InsertComponentToOpenAssembly(statorEndSheet);
+        ApplyCoincidentMate(insertedSkeleton, "X-Achse", repeatedEndSeed, "Z-Achse");
+        ApplyCoincidentMate(insertedSkeleton, "Ebene vorne", repeatedEndSeed, "Ebene rechts");
+        ApplyCoincidentMate(insertedSkeleton, "Ebene rechts", repeatedEndSeed, "Ebene vorne", Mm(stackOffsetMm));
+        stackOffsetMm += statorEndSheetStackThicknessMm;
+
+        Component2 repeatedStatorSeed = InsertComponentToOpenAssembly(statorSheet);
+        ApplyCoincidentMate(insertedSkeleton, "X-Achse", repeatedStatorSeed, "Z-Achse");
+        ApplyCoincidentMate(insertedSkeleton, "Ebene vorne", repeatedStatorSeed, "Ebene rechts");
+        ApplyCoincidentMate(insertedSkeleton, "Ebene rechts", repeatedStatorSeed, "Ebene vorne", Mm(stackOffsetMm));
+        stackOffsetMm += statorSheetPackThicknessMm;
+
+        CreateLinearComponentPattern(
+            insertedSkeleton,
+            "X-Achse",
+            RepeatedDistanceEndSheetPacks + 1,
+            Mm(repeatedStackBlockThicknessMm),
+            repeatedDistanceSeed,
+            repeatedEndSeed,
+            repeatedStatorSeed);
+
+        stackOffsetMm += RepeatedDistanceEndSheetPacks * repeatedStackBlockThicknessMm;
+
+        insertedStackComponent = InsertComponentToOpenAssembly(statorEndSheet);
+        ApplyCoincidentMate(insertedSkeleton, "X-Achse", insertedStackComponent, "Z-Achse");
+        ApplyCoincidentMate(insertedSkeleton, "Ebene vorne", insertedStackComponent, "Ebene rechts", 0, true);
+        ApplyCoincidentMate(insertedSkeleton, "Ebene rechts", insertedStackComponent, "Ebene vorne", Mm(stackOffsetMm));
+        stackOffsetMm += statorEndSheetStackThicknessMm;
+
+        insertedStackComponent = InsertComponentToOpenAssembly(pressPlate);
+        ApplyCoincidentMate(insertedSkeleton, "X-Achse", insertedStackComponent, "Z-Achse");
+        ApplyAngleMate(insertedSkeleton, "Ebene vorne", insertedStackComponent, "Ebene rechts", PressPlateAngleDeg);
+        ApplyCoincidentMate(insertedSkeleton, "Ebene rechts", insertedStackComponent, "Ebene vorne", Mm(stackOffsetMm));
+        stackOffsetMm += pressPlateStackThicknessMm;
+
+        insertedStackComponent = InsertComponentToOpenAssembly(pressRingNde);
+        ApplyCoincidentMate(insertedSkeleton, "X-Achse", insertedStackComponent, "Z-Achse");
+        ApplyCoincidentMate(insertedSkeleton, "Ebene vorne", insertedStackComponent, "Ebene rechts");
+        ApplyCoincidentMate(insertedSkeleton, "Ebene rechts", insertedStackComponent, "Ebene vorne", Mm(stackOffsetMm));
+        stackOffsetMm += pressRingNdeStackThicknessMm;
+
+        double totalStackLengthMm = stackOffsetMm;
+        Component2 insertedTorsionBar = InsertComponentToOpenAssembly(tensionBar);
+        ApplyParallelMate(insertedSkeleton, "X-Achse", insertedTorsionBar, "X-Achse");
+        ApplyCoincidentMate(insertedSkeleton, "Ebene vorne", insertedTorsionBar, "Ebene oben");
+        ApplyCoincidentMate(insertedSkeleton, "Ebene oben", insertedTorsionBar, "Ebene vorne", Mm(torsionBarSlotRadiusMm));
+        ApplyCoincidentMate(insertedSkeleton, "Ebene rechts", insertedTorsionBar, "Ebene rechts", Mm(totalStackLengthMm / 2.0));
+        CreateCircularComponentPattern(insertedSkeleton, "X-Achse", torsionBarPatternCount, 2 * Math.PI, insertedTorsionBar);
+
+        if (requestedClose)
+            CloseOpenAssembly();
+
+        return machine;
+    }
+
+    private void ApplyChildDefaults(AutomationDocumentBase definition, string outputFolder)
+    {
+        if (string.IsNullOrWhiteSpace(definition.OutputFolder))
+            definition.OutputFolder = outputFolder;
+
+        if (SaveToPdm)
+            definition.SaveToPdm = true;
+    }
 }

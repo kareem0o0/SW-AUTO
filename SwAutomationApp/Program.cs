@@ -1,37 +1,26 @@
-// Import base .NET types; alternative: remove if unused to speed build slightly.
 using System;
 using SolidWorks.Interop.sldworks;
-// Removes platform warnings by specifying this code is Windows-only.
+using SwAutomation.Pdm;
+
 [assembly: System.Runtime.Versioning.SupportedOSPlatform("windows")]
 
 namespace SwAutomation;
 
-// Program entry type; coordinates session and service classes.
 public static class Program
 {
     [STAThread]
-    
     public static void Main(string[] args)
-{
-    Console.WriteLine("Connecting to SOLIDWORKS...");
-    SldWorks swApp = new SldWorks { Visible = true };
+    {
+        Console.WriteLine("Connecting to SOLIDWORKS...");
 
-    var pdm = new global::SwAutomation.Pdm.PdmModule();
-    var myPart = new Part(swApp, pdm);
-    var assembly = new Assembly(swApp, pdm);
+        SldWorks swApp = new SldWorks
+        {
+            Visible = true
+        };
 
-    //pdm.Login(); 
-    //string outFolder = @"60_Tests\665_Test_Kareem";
-    string localoutFolder = @"C:\Users\kareem.salah\Downloads\birr machines\birr machines\parts";
-    Project1.Run4(localoutFolder, myPart, assembly);
-    //myPart.Create_stator_sheet(outFolder);
-    //pdm.GetDataCardValues(@"60_Tests\665_Test_Kareem\BMZS010258.sldprt");
-    //string statorFileName = myPart.Create_stator_sheet(outFolder,true);
-    //pdm.FillBirrDataCard(System.IO.Path.Combine(outFolder, statorFileName));
+        var pdm = new PdmModule();
+        string localOutputFolder = @"C:\Users\kareem.salah\Downloads\birr machines\birr machines\parts";
 
-    //myPart.CreateSkeleton(sideOffset: 500.0, groundOffset: -250.0, outFolder: outFolder,closeAfterCreate: true);
-    //string myLocalPart = @"C:\Users\kareem.salah\Downloads\birr machines\birr machines\parts\StatorComplete.SLDASM";
-    //pdm.AddExistingFileToPdm(myLocalPart, @"60_Tests\665_Test_Kareem");
-    
-}
+        Project1.Run4(localOutputFolder, swApp, pdm);
+    }
 }
