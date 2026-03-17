@@ -1,39 +1,38 @@
 using System;
 using SolidWorks.Interop.sldworks;
-using SwAutomation.Pdm;
 
 namespace SwAutomation;
 
 public static class Project1
 {
-    public static void Run(string outFolder, SldWorks swApp, PdmModule pdm)
+    public static void Run(string outFolder, SldWorks swApp)
     {
         if (string.IsNullOrWhiteSpace(outFolder))
             throw new ArgumentException("Output folder is required.", nameof(outFolder));
 
-        SkeletonPart skeleton = new SkeletonPart(swApp, pdm);
+        SkeletonPart skeleton = new SkeletonPart(swApp);
         skeleton.OutputFolder = outFolder;
-        skeleton.DESideOffset = 500.0;
-        skeleton.NDESideOffset = 500.0;
-        skeleton.GroundOffsetMm = -250.0;
+        skeleton.DESideOffset = 0.5;
+        skeleton.NDESideOffset = 0.5;
+        skeleton.GroundOffsetMm = -0.25;
         skeleton.CloseAfterCreate = true;
 
-        AssemblyFile rotor = new AssemblyFile(swApp, pdm);
+        AssemblyFile rotor = new AssemblyFile(swApp);
         rotor.FileName = "RotorComplete.SLDASM";
         rotor.OutputFolder = outFolder;
         rotor.CloseAfterCreate = true;
 
-        AssemblyFile stator = new AssemblyFile(swApp, pdm);
+        AssemblyFile stator = new AssemblyFile(swApp);
         stator.FileName = "StatorComplete.SLDASM";
         stator.OutputFolder = outFolder;
         stator.CloseAfterCreate = true;
 
-        AssemblyFile housing = new AssemblyFile(swApp, pdm);
+        AssemblyFile housing = new AssemblyFile(swApp);
         housing.FileName = "HousingMachined.SLDASM";
         housing.OutputFolder = outFolder;
         housing.CloseAfterCreate = true;
 
-        AssemblyFile machine = new AssemblyFile(swApp, pdm);
+        AssemblyFile machine = new AssemblyFile(swApp);
         machine.FileName = "MachineAssembly.SLDASM";
         machine.OutputFolder = outFolder;
 
@@ -58,27 +57,27 @@ public static class Project1
         Console.WriteLine($"Macro completed. Machine assembly: {machinePath}");
     }
 
-    public static void Run2(string outFolder, SldWorks swApp, PdmModule pdm)
+    public static void Run2(string outFolder, SldWorks swApp)
     {
         if (string.IsNullOrWhiteSpace(outFolder))
             throw new ArgumentException("Output folder is required.", nameof(outFolder));
 
-        SkeletonPart skeleton = new SkeletonPart(swApp, pdm);
+        SkeletonPart skeleton = new SkeletonPart(swApp);
         skeleton.OutputFolder = outFolder;
-        skeleton.DESideOffset = 2000.0;
-        skeleton.NDESideOffset = 2000.0;
-        skeleton.GroundOffsetMm = -500.0;
+        skeleton.DESideOffset = 2.0;
+        skeleton.NDESideOffset = 2.0;
+        skeleton.GroundOffsetMm = -0.5;
         skeleton.CloseAfterCreate = true;
 
-        StatorSheetPart statorSheet = new StatorSheetPart(swApp, pdm);
+        StatorSheetPart statorSheet = new StatorSheetPart(swApp);
         statorSheet.OutputFolder = outFolder;
         statorSheet.CloseAfterCreate = true;
 
-        ShaftPart shaft = new ShaftPart(swApp, pdm);
+        ShaftPart shaft = new ShaftPart(swApp);
         shaft.OutputFolder = outFolder;
         shaft.CloseAfterCreate = true;
 
-        AssemblyFile machine = new AssemblyFile(swApp, pdm);
+        AssemblyFile machine = new AssemblyFile(swApp);
         machine.FileName = "MachineAssembly.SLDASM";
         machine.OutputFolder = outFolder;
 
@@ -99,107 +98,101 @@ public static class Project1
         Console.WriteLine($"Macro completed. Machine assembly: {machinePath}");
     }
 
-    public static void Run3(string outFolder, SldWorks swApp, PdmModule pdm)
+    public static void Run3(string outFolder, SldWorks swApp)
     {
         if (string.IsNullOrWhiteSpace(outFolder))
             throw new ArgumentException("Output folder is required.", nameof(outFolder));
 
         _ = swApp;
-        _ = pdm;
         Console.WriteLine("Run3 is reserved for ad-hoc generator checks.");
     }
 
-    public static void Run4(string outFolder, SldWorks swApp, PdmModule pdm)
+    public static void Run4(string outFolder, SldWorks swApp)
     {
         if (string.IsNullOrWhiteSpace(outFolder))
             throw new ArgumentException("Output folder is required.", nameof(outFolder));
 
         // These objects are the editable parameter surface for the machine build.
         // Skeleton planes and axes act as the assembly reference frame.
-        SkeletonPart skeleton = new SkeletonPart(swApp, pdm);
+        SkeletonPart skeleton = new SkeletonPart(swApp);
         skeleton.OutputFolder = outFolder;
-        skeleton.SaveToPdm = false;
         skeleton.CloseAfterCreate = true;
         skeleton.LocalFileName = "skeleton.SLDPRT";
-        skeleton.DESideOffset = 2000.0;
-        skeleton.NDESideOffset = 2000.0;
-        skeleton.GroundOffsetMm = -500.0;
+        skeleton.DESideOffset = 2.0;
+        skeleton.NDESideOffset = 2.0;
+        skeleton.GroundOffsetMm = -0.5;
 
         // Main stator lamination used as the thick core pack.
-        StatorSheetPart statorSheet = new StatorSheetPart(swApp, pdm);
+        StatorSheetPart statorSheet = new StatorSheetPart(swApp);
         statorSheet.OutputFolder = outFolder;
-        statorSheet.SaveToPdm = false;
         statorSheet.CloseAfterCreate = true;
         statorSheet.LocalFileName = "StatorBleche.SLDPRT";
-        statorSheet.OuterDiameterMm = 990.0;
-        statorSheet.InnerDiameterMm = 640.0;
-        statorSheet.PlateThicknessMm = 100.0;
-        statorSheet.SlotWidthMm = 15.7;
-        statorSheet.SlotBottomYmm = 320.0;
-        statorSheet.SlotTopYmm = 405.2;
+        statorSheet.OuterDiameterMm = 0.99;
+        statorSheet.InnerDiameterMm = 0.64;
+        statorSheet.PlateThicknessMm = 0.1;
+        statorSheet.SlotWidthMm = 0.0157;
+        statorSheet.SlotBottomYmm = 0.32;
+        statorSheet.SlotTopYmm = 0.4052;
         statorSheet.AngleInDegrees = 70.0;
-        statorSheet.FilletRadiusMm = 1.0;
-        statorSheet.SlotGuideSpacingMm = 5.7;
-        statorSheet.SlotGuideOffsetMm = -0.7;
+        statorSheet.FilletRadiusMm = 0.001;
+        statorSheet.SlotGuideSpacingMm = 0.0057;
+        statorSheet.SlotGuideOffsetMm = -0.0007;
         statorSheet.SlotPatternCount = 60;
         statorSheet.MaterialName = "AISI 1020";
 
         // Distance sheets add the repeated spacer/boss geometry between stator packs.
-        StatorDistanceSheetPart statorDistanceSheet = new StatorDistanceSheetPart(swApp, pdm);
+        StatorDistanceSheetPart statorDistanceSheet = new StatorDistanceSheetPart(swApp);
         statorDistanceSheet.OutputFolder = outFolder;
-        statorDistanceSheet.SaveToPdm = false;
         statorDistanceSheet.CloseAfterCreate = true;
         statorDistanceSheet.LocalFileName = "StatorDistanceBleche.SLDPRT";
-        statorDistanceSheet.OuterDiameterMm = 990.0;
-        statorDistanceSheet.InnerDiameterMm = 640.0;
-        statorDistanceSheet.PlateThicknessMm = 1.0;
-        statorDistanceSheet.SlotWidthMm = 20.5;
-        statorDistanceSheet.SlotBottomYmm = 320.0;
-        statorDistanceSheet.SlotTopYmm = 406.0;
-        statorDistanceSheet.BossRectangleHeightMm = 160.0;
-        statorDistanceSheet.BossRectangleWidthMm = 8.0;
-        statorDistanceSheet.BossOuterDiameterOffsetMm = 9.0;
+        statorDistanceSheet.OuterDiameterMm = 0.99;
+        statorDistanceSheet.InnerDiameterMm = 0.64;
+        statorDistanceSheet.PlateThicknessMm = 0.001;
+        statorDistanceSheet.SlotWidthMm = 0.0205;
+        statorDistanceSheet.SlotBottomYmm = 0.32;
+        statorDistanceSheet.SlotTopYmm = 0.406;
+        statorDistanceSheet.BossRectangleHeightMm = 0.16;
+        statorDistanceSheet.BossRectangleWidthMm = 0.008;
+        statorDistanceSheet.BossOuterDiameterOffsetMm = 0.009;
         statorDistanceSheet.BossCenterlineAngleDeg = 2.96;
-        statorDistanceSheet.BossExtrusionDepthMm = 10.0;
-        statorDistanceSheet.BossCutOuterTabWidthMm = 2.0;
-        statorDistanceSheet.BossCutOuterTabHeightMm = 2.5;
-        statorDistanceSheet.BossCutTopShelfThicknessMm = 1.5;
-        statorDistanceSheet.BossCutInnerLegWidthMm = 1.5;
-        statorDistanceSheet.BossCutBoundaryExtensionMm = 2.0;
+        statorDistanceSheet.BossExtrusionDepthMm = 0.01;
+        statorDistanceSheet.BossCutOuterTabWidthMm = 0.002;
+        statorDistanceSheet.BossCutOuterTabHeightMm = 0.0025;
+        statorDistanceSheet.BossCutTopShelfThicknessMm = 0.0015;
+        statorDistanceSheet.BossCutInnerLegWidthMm = 0.0015;
+        statorDistanceSheet.BossCutBoundaryExtensionMm = 0.002;
         statorDistanceSheet.BossCircularPatternCount = 60;
         statorDistanceSheet.SlotPatternCount = 60;
         statorDistanceSheet.MaterialName = "AISI 1020";
 
         // End sheets cap the repeated lamination stack at each side.
-        StatorEndSheetPart statorEndSheet = new StatorEndSheetPart(swApp, pdm);
+        StatorEndSheetPart statorEndSheet = new StatorEndSheetPart(swApp);
         statorEndSheet.OutputFolder = outFolder;
-        statorEndSheet.SaveToPdm = false;
         statorEndSheet.CloseAfterCreate = true;
         statorEndSheet.LocalFileName = "StatorEndBleche.SLDPRT";
-        statorEndSheet.OuterDiameterMm = 990.0;
-        statorEndSheet.InnerDiameterMm = 640.0;
-        statorEndSheet.PlateThicknessMm = 1.0;
-        statorEndSheet.SlotWidthMm = 20.5;
-        statorEndSheet.SlotBottomYmm = 320.0;
-        statorEndSheet.SlotTopYmm = 406.0;
+        statorEndSheet.OuterDiameterMm = 0.99;
+        statorEndSheet.InnerDiameterMm = 0.64;
+        statorEndSheet.PlateThicknessMm = 0.001;
+        statorEndSheet.SlotWidthMm = 0.0205;
+        statorEndSheet.SlotBottomYmm = 0.32;
+        statorEndSheet.SlotTopYmm = 0.406;
         statorEndSheet.SlotPatternCount = 60;
         statorEndSheet.MaterialName = "AISI 1020";
 
         // Torsion bars are created once and then patterned around the finished stack.
-        TorsionBarPart torsionBar = new TorsionBarPart(swApp, pdm);
+        TorsionBarPart torsionBar = new TorsionBarPart(swApp);
         torsionBar.OutputFolder = outFolder;
-        torsionBar.SaveToPdm = false;
         torsionBar.CloseAfterCreate = true;
         torsionBar.LocalFileName = "TorsionBar.SLDPRT";
-        torsionBar.BarLengthMm = 1074.0;
-        torsionBar.BarHeightMm = 40.0;
-        torsionBar.BarThicknessMm = 30.0;
-        torsionBar.HoleCenterlineOffsetFromBottomMm = 20.0;
-        torsionBar.OuterHoleEndOffsetMm = 30.0;
-        torsionBar.HolePairSpacingMm = 315.0;
-        torsionBar.OuterHoleDiameterMm = 10.0;
-        torsionBar.InnerHoleDiameterMm = 16.0;
-        torsionBar.CenterHoleDiameterMm = 16.0;
+        torsionBar.BarLengthMm = 1.074;
+        torsionBar.BarHeightMm = 0.04;
+        torsionBar.BarThicknessMm = 0.03;
+        torsionBar.HoleCenterlineOffsetFromBottomMm = 0.02;
+        torsionBar.OuterHoleEndOffsetMm = 0.03;
+        torsionBar.HolePairSpacingMm = 0.315;
+        torsionBar.OuterHoleDiameterMm = 0.01;
+        torsionBar.InnerHoleDiameterMm = 0.016;
+        torsionBar.CenterHoleDiameterMm = 0.016;
         torsionBar.OuterTapSizePrimary = "M10x1.5";
         torsionBar.OuterTapSizeFallback = "M10";
         torsionBar.InnerTapSizePrimary = "M16x2";
@@ -209,51 +202,48 @@ public static class Project1
         torsionBar.MaterialName = "AISI 1020";
 
         // Press plates clamp the stack and also carry the assembly placement angle.
-        PressPlatePart pressPlate = new PressPlatePart(swApp, pdm);
+        PressPlatePart pressPlate = new PressPlatePart(swApp);
         pressPlate.OutputFolder = outFolder;
-        pressPlate.SaveToPdm = false;
         pressPlate.CloseAfterCreate = true;
         pressPlate.LocalFileName = "PressPlate.SLDPRT";
-        pressPlate.OuterDiameterMm = 990.0;
-        pressPlate.RingInnerDiameterMm = 840.0;
-        pressPlate.PlateOuterInsetFromOuterDiameterMm = 5.0;
-        pressPlate.PlateRadialLengthMm = 165.0;
-        pressPlate.RingThicknessMm = 2.0;
-        pressPlate.PlateBodyThicknessMm = 10.0;
-        pressPlate.PlateWidthMm = 6.0;
+        pressPlate.OuterDiameterMm = 0.99;
+        pressPlate.RingInnerDiameterMm = 0.84;
+        pressPlate.PlateOuterInsetFromOuterDiameterMm = 0.005;
+        pressPlate.PlateRadialLengthMm = 0.165;
+        pressPlate.RingThicknessMm = 0.002;
+        pressPlate.PlateBodyThicknessMm = 0.01;
+        pressPlate.PlateWidthMm = 0.006;
         pressPlate.PlateCount = 60;
         pressPlate.AssemblyAngleDeg = 3.0;
         pressPlate.MaterialName = "AISI 1020";
 
         // The NDE press ring is the first and last hardware item in the axial stack.
-        StatorPressringNdePart pressRingNde = new StatorPressringNdePart(swApp, pdm);
+        StatorPressringNdePart pressRingNde = new StatorPressringNdePart(swApp);
         pressRingNde.OutputFolder = outFolder;
-        pressRingNde.SaveToPdm = false;
         pressRingNde.CloseAfterCreate = true;
         pressRingNde.LocalFileName = "StatorPressringNDE.SLDPRT";
-        pressRingNde.OuterDiameterMm = 1100.0;
-        pressRingNde.InnerDiameterMm = 840.0;
-        pressRingNde.PressRingOuterDiameterMm = 860.0;
-        pressRingNde.RingThicknessMm = 28.0;
-        pressRingNde.PressRingThicknessMm = 2.0;
-        pressRingNde.BaseInnerChamferDistanceMm = 20.0;
+        pressRingNde.OuterDiameterMm = 1.1;
+        pressRingNde.InnerDiameterMm = 0.84;
+        pressRingNde.PressRingOuterDiameterMm = 0.86;
+        pressRingNde.RingThicknessMm = 0.028;
+        pressRingNde.PressRingThicknessMm = 0.002;
+        pressRingNde.BaseInnerChamferDistanceMm = 0.02;
         pressRingNde.BaseInnerChamferAngleDeg = 30.0;
-        pressRingNde.PocketCenterRadiusMm = 520.0;
-        pressRingNde.PocketWidthMm = 43.0;
-        pressRingNde.PocketHeightMm = 36.0;
-        pressRingNde.PocketCornerRadiusMm = 5.0;
+        pressRingNde.PocketCenterRadiusMm = 0.52;
+        pressRingNde.PocketWidthMm = 0.043;
+        pressRingNde.PocketHeightMm = 0.036;
+        pressRingNde.PocketCornerRadiusMm = 0.005;
         pressRingNde.PocketCount = 8;
         pressRingNde.MaterialName = "AISI 1020";
 
         // This is the target assembly document that all generated parts are inserted into.
-        AssemblyFile machine = new AssemblyFile(swApp, pdm);
+        AssemblyFile machine = new AssemblyFile(swApp);
         machine.OutputFolder = outFolder;
-        machine.SaveToPdm = false;
         machine.FileName = "MachineAssembly.SLDASM";
         machine.CloseAfterCreate = false;
         int repeatedDistanceEndSheetPacks = 5;
 
-        double Mm(double mm) => mm / 1000.0;
+        double AsMeters(double value) => value;
 
         // Keep stack spacing derived from the current part settings.
         double statorSheetPackThicknessMm = statorSheet.PlateThicknessMm;
@@ -285,43 +275,43 @@ public static class Project1
         insertedStackComponent = machine.Insert(pressRingNdePath);
         machine.MateCoincident(insertedSkeleton, "X-Achse", insertedStackComponent, "Z-Achse");
         machine.MateCoincident(insertedSkeleton, "Ebene vorne", insertedStackComponent, "Ebene rechts");
-        machine.MateCoincident(insertedSkeleton, "Ebene rechts", insertedStackComponent, "Ebene vorne", Mm(stackOffsetMm));
+        machine.MateCoincident(insertedSkeleton, "Ebene rechts", insertedStackComponent, "Ebene vorne", AsMeters(stackOffsetMm));
         stackOffsetMm += pressRingNdeStackThicknessMm;
 
         insertedStackComponent = machine.Insert(pressPlatePath);
         machine.MateCoincident(insertedSkeleton, "X-Achse", insertedStackComponent, "Z-Achse");
         machine.MateAngle(insertedSkeleton, "Ebene vorne", insertedStackComponent, "Ebene rechts", pressPlate.AssemblyAngleDeg);
-        machine.MateCoincident(insertedSkeleton, "Ebene rechts", insertedStackComponent, "Ebene vorne", Mm(stackOffsetMm));
+        machine.MateCoincident(insertedSkeleton, "Ebene rechts", insertedStackComponent, "Ebene vorne", AsMeters(stackOffsetMm));
         stackOffsetMm += pressPlateStackThicknessMm;
 
         insertedStackComponent = machine.Insert(statorEndSheetPath);
         machine.MateCoincident(insertedSkeleton, "X-Achse", insertedStackComponent, "Z-Achse");
         machine.MateCoincident(insertedSkeleton, "Ebene vorne", insertedStackComponent, "Ebene rechts");
-        machine.MateCoincident(insertedSkeleton, "Ebene rechts", insertedStackComponent, "Ebene vorne", Mm(stackOffsetMm));
+        machine.MateCoincident(insertedSkeleton, "Ebene rechts", insertedStackComponent, "Ebene vorne", AsMeters(stackOffsetMm));
         stackOffsetMm += statorEndSheetStackThicknessMm;
 
         insertedStackComponent = machine.Insert(statorSheetPath);
         machine.MateCoincident(insertedSkeleton, "X-Achse", insertedStackComponent, "Z-Achse");
         machine.MateCoincident(insertedSkeleton, "Ebene vorne", insertedStackComponent, "Ebene rechts");
-        machine.MateCoincident(insertedSkeleton, "Ebene rechts", insertedStackComponent, "Ebene vorne", Mm(stackOffsetMm));
+        machine.MateCoincident(insertedSkeleton, "Ebene rechts", insertedStackComponent, "Ebene vorne", AsMeters(stackOffsetMm));
         stackOffsetMm += statorSheetPackThicknessMm;
 
         Component2 repeatedDistanceSeed = machine.Insert(statorDistanceSheetPath);
         machine.MateCoincident(insertedSkeleton, "X-Achse", repeatedDistanceSeed, "Z-Achse");
         machine.MateCoincident(insertedSkeleton, "Ebene vorne", repeatedDistanceSeed, "Ebene rechts");
-        machine.MateCoincident(insertedSkeleton, "Ebene rechts", repeatedDistanceSeed, "Ebene vorne", Mm(stackOffsetMm));
+        machine.MateCoincident(insertedSkeleton, "Ebene rechts", repeatedDistanceSeed, "Ebene vorne", AsMeters(stackOffsetMm));
         stackOffsetMm += statorDistanceSheetStackThicknessMm;
 
         Component2 repeatedEndSeed = machine.Insert(statorEndSheetPath);
         machine.MateCoincident(insertedSkeleton, "X-Achse", repeatedEndSeed, "Z-Achse");
         machine.MateCoincident(insertedSkeleton, "Ebene vorne", repeatedEndSeed, "Ebene rechts");
-        machine.MateCoincident(insertedSkeleton, "Ebene rechts", repeatedEndSeed, "Ebene vorne", Mm(stackOffsetMm));
+        machine.MateCoincident(insertedSkeleton, "Ebene rechts", repeatedEndSeed, "Ebene vorne", AsMeters(stackOffsetMm));
         stackOffsetMm += statorEndSheetStackThicknessMm;
 
         Component2 repeatedStatorSeed = machine.Insert(statorSheetPath);
         machine.MateCoincident(insertedSkeleton, "X-Achse", repeatedStatorSeed, "Z-Achse");
         machine.MateCoincident(insertedSkeleton, "Ebene vorne", repeatedStatorSeed, "Ebene rechts");
-        machine.MateCoincident(insertedSkeleton, "Ebene rechts", repeatedStatorSeed, "Ebene vorne", Mm(stackOffsetMm));
+        machine.MateCoincident(insertedSkeleton, "Ebene rechts", repeatedStatorSeed, "Ebene vorne", AsMeters(stackOffsetMm));
         stackOffsetMm += statorSheetPackThicknessMm;
 
         // Repeat the middle stator block along the machine length.
@@ -329,7 +319,7 @@ public static class Project1
             insertedSkeleton,
             "X-Achse",
             repeatedDistanceEndSheetPacks + 1,
-            Mm(repeatedStackBlockThicknessMm),
+            AsMeters(repeatedStackBlockThicknessMm),
             repeatedDistanceSeed,
             repeatedEndSeed,
             repeatedStatorSeed);
@@ -340,33 +330,33 @@ public static class Project1
         insertedStackComponent = machine.Insert(statorEndSheetPath);
         machine.MateCoincident(insertedSkeleton, "X-Achse", insertedStackComponent, "Z-Achse");
         machine.MateCoincident(insertedSkeleton, "Ebene vorne", insertedStackComponent, "Ebene rechts", 0, true);
-        machine.MateCoincident(insertedSkeleton, "Ebene rechts", insertedStackComponent, "Ebene vorne", Mm(stackOffsetMm));
+        machine.MateCoincident(insertedSkeleton, "Ebene rechts", insertedStackComponent, "Ebene vorne", AsMeters(stackOffsetMm));
         stackOffsetMm += statorEndSheetStackThicknessMm;
 
         insertedStackComponent = machine.Insert(pressPlatePath);
         machine.MateCoincident(insertedSkeleton, "X-Achse", insertedStackComponent, "Z-Achse");
         machine.MateAngle(insertedSkeleton, "Ebene vorne", insertedStackComponent, "Ebene rechts", pressPlate.AssemblyAngleDeg);
-        machine.MateCoincident(insertedSkeleton, "Ebene rechts", insertedStackComponent, "Ebene vorne", Mm(stackOffsetMm));
+        machine.MateCoincident(insertedSkeleton, "Ebene rechts", insertedStackComponent, "Ebene vorne", AsMeters(stackOffsetMm));
         stackOffsetMm += pressPlateStackThicknessMm;
 
         insertedStackComponent = machine.Insert(pressRingNdePath);
         machine.MateCoincident(insertedSkeleton, "X-Achse", insertedStackComponent, "Z-Achse");
         machine.MateCoincident(insertedSkeleton, "Ebene vorne", insertedStackComponent, "Ebene rechts");
-        machine.MateCoincident(insertedSkeleton, "Ebene rechts", insertedStackComponent, "Ebene vorne", Mm(stackOffsetMm));
+        machine.MateCoincident(insertedSkeleton, "Ebene rechts", insertedStackComponent, "Ebene vorne", AsMeters(stackOffsetMm));
         stackOffsetMm += pressRingNdeStackThicknessMm;
 
         // Place one torsion bar and pattern it around the main axis.
         Component2 insertedTorsionBar = machine.Insert(torsionBarPath);
         machine.MateParallel(insertedSkeleton, "X-Achse", insertedTorsionBar, "X-Achse");
         machine.MateCoincident(insertedSkeleton, "Ebene vorne", insertedTorsionBar, "Ebene oben");
-        machine.MateCoincident(insertedSkeleton, "Ebene oben", insertedTorsionBar, "Ebene vorne", Mm(torsionBarSlotRadiusMm));
-        machine.MateCoincident(insertedSkeleton, "Ebene rechts", insertedTorsionBar, "Ebene rechts", Mm(stackOffsetMm / 2.0));
+        machine.MateCoincident(insertedSkeleton, "Ebene oben", insertedTorsionBar, "Ebene vorne", AsMeters(torsionBarSlotRadiusMm));
+        machine.MateCoincident(insertedSkeleton, "Ebene rechts", insertedTorsionBar, "Ebene rechts", AsMeters(stackOffsetMm / 2.0));
         machine.CircularPattern(insertedSkeleton, "X-Achse", torsionBarPatternCount, 2 * Math.PI, insertedTorsionBar);
 
         Console.WriteLine($"Macro completed. Machine assembly: {machinePath}");
     }
 
-    public static void Run5(string outFolder, SldWorks swApp, PdmModule pdm)
+    public static void Run5(string outFolder, SldWorks swApp)
     {
         if (string.IsNullOrWhiteSpace(outFolder))
             throw new ArgumentException("Output folder is required.", nameof(outFolder));
@@ -375,20 +365,19 @@ public static class Project1
         // It owns everything for the torsion bar:
         // 1. the 3D model parameters
         // 2. the 2D drawing parameters
-        TorsionBarPart torsionBar = new TorsionBarPart(swApp, pdm);
+        TorsionBarPart torsionBar = new TorsionBarPart(swApp);
         torsionBar.OutputFolder = outFolder;
-        torsionBar.SaveToPdm = false;
         torsionBar.CloseAfterCreate = true;
         torsionBar.LocalFileName = "TorsionBar.SLDPRT";
-        torsionBar.BarLengthMm = 1074.0;
-        torsionBar.BarHeightMm = 40.0;
-        torsionBar.BarThicknessMm = 30.0;
-        torsionBar.HoleCenterlineOffsetFromBottomMm = 20.0;
-        torsionBar.OuterHoleEndOffsetMm = 30.0;
-        torsionBar.HolePairSpacingMm = 315.0;
-        torsionBar.OuterHoleDiameterMm = 10.0;
-        torsionBar.InnerHoleDiameterMm = 16.0;
-        torsionBar.CenterHoleDiameterMm = 16.0;
+        torsionBar.BarLengthMm = 1.074;
+        torsionBar.BarHeightMm = 0.04;
+        torsionBar.BarThicknessMm = 0.03;
+        torsionBar.HoleCenterlineOffsetFromBottomMm = 0.02;
+        torsionBar.OuterHoleEndOffsetMm = 0.03;
+        torsionBar.HolePairSpacingMm = 0.315;
+        torsionBar.OuterHoleDiameterMm = 0.01;
+        torsionBar.InnerHoleDiameterMm = 0.016;
+        torsionBar.CenterHoleDiameterMm = 0.016;
         torsionBar.OuterTapSizePrimary = "M10x1.5";
         torsionBar.OuterTapSizeFallback = "M10";
         torsionBar.InnerTapSizePrimary = "M16x2";
@@ -401,14 +390,13 @@ public static class Project1
         // They live on the same part object so you can configure everything in one place,
         // but the actual drawing work is still implemented in drawing.cs.
         torsionBar.DrawingOutputFolder = outFolder;
-        torsionBar.DrawingSaveToPdm = false;
         // false = leave the drawing open after Create(); true = close it after saving
         torsionBar.DrawingCloseAfterCreate = false;
         torsionBar.DrawingLocalFileName = "TorsionBar.SLDDRW";
         torsionBar.DrawingSheetName = "Torsion Bar";
         torsionBar.DrawingLanguageCode = "EN";
-        torsionBar.DrawingTemplateFolderPath = @"C:\Users\kareem.salah\PDM\Birr Machines PDM\40_Templates\Solidworks\Blattformate\Birr Machines";
-        torsionBar.DrawingBottomTitleBlockClearanceMm = 85.0;
+        torsionBar.DrawingTemplateFolderPath = string.Empty;
+        torsionBar.DrawingBottomTitleBlockClearanceMm = 0.085;
         torsionBar.DrawingReferencedConfiguration = "P0002";
 
         // Call the combined entry point on the part.

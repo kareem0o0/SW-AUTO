@@ -1,6 +1,5 @@
 using System;
 using SolidWorks.Interop.sldworks;
-using SwAutomation.Pdm;
 
 [assembly: System.Runtime.Versioning.SupportedOSPlatform("windows")]
 
@@ -16,32 +15,31 @@ public static class Program
         SldWorks swApp = new SldWorks();
         swApp.Visible = true;
 
-        PdmModule pdm = new PdmModule();
         string outFolder = @"C:\Users\kareem.salah\Downloads\birr machines\birr machines\parts";
 
-        SkeletonPart skeleton = new SkeletonPart(swApp, pdm);
+        SkeletonPart skeleton = new SkeletonPart(swApp);
         skeleton.OutputFolder = outFolder;
-        skeleton.DESideOffset = 500.0;
-        skeleton.NDESideOffset = 500.0;
-        skeleton.GroundOffsetMm = -250.0;
+        skeleton.DESideOffset = 0.5;
+        skeleton.NDESideOffset = 0.5;
+        skeleton.GroundOffsetMm = -0.25;
         skeleton.CloseAfterCreate = true;
 
-        AssemblyFile rotor = new AssemblyFile(swApp, pdm);
+        AssemblyFile rotor = new AssemblyFile(swApp);
         rotor.FileName = "RotorComplete.SLDASM";
         rotor.OutputFolder = outFolder;
         rotor.CloseAfterCreate = true;
 
-        AssemblyFile stator = new AssemblyFile(swApp, pdm);
+        AssemblyFile stator = new AssemblyFile(swApp);
         stator.FileName = "StatorComplete.SLDASM";
         stator.OutputFolder = outFolder;
         stator.CloseAfterCreate = true;
 
-        AssemblyFile housing = new AssemblyFile(swApp, pdm);
+        AssemblyFile housing = new AssemblyFile(swApp);
         housing.FileName = "HousingMachined.SLDASM";
         housing.OutputFolder = outFolder;
         housing.CloseAfterCreate = true;
 
-        AssemblyFile machine = new AssemblyFile(swApp, pdm);
+        AssemblyFile machine = new AssemblyFile(swApp);
         machine.FileName = "MachineAssembly.SLDASM";
         machine.OutputFolder = outFolder;
 

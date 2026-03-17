@@ -2,29 +2,25 @@ using System;
 using System.IO;
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
-using SwAutomation.Pdm;
 
 namespace SwAutomation;
 
 public sealed class AssemblyFile
 {
     private readonly SldWorks _swApp;
-    private readonly PdmModule _pdm;
     private ModelDoc2 _model = null;
     private AssemblyDoc _assembly = null;
     private string _folder = string.Empty;
     private int _insertIndex = 0;
     private Component2 _lastInsertedComponent = null;
 
-    public AssemblyFile(SldWorks swApp, PdmModule pdm)
+    public AssemblyFile(SldWorks swApp)
     {
         _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
-        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
     }
 
     public string OutputFolder { get; set; } = string.Empty;
     public bool CloseAfterCreate { get; set; }
-    public bool SaveToPdm { get; set; }
     public string FileName { get; set; } = "Assembly.SLDASM";
 
     private string GetRequiredOutputFolder() => AutomationSupport.RequireText(OutputFolder, nameof(OutputFolder), nameof(AssemblyFile));
@@ -39,20 +35,11 @@ public sealed class AssemblyFile
     {
         string outFolder = GetRequiredOutputFolder();
         string fileName = GetRequiredFileName();
-        bool saveToPdm = SaveToPdm;
         Directory.CreateDirectory(outFolder);
         string template = _swApp.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplateAssembly);
         ModelDoc2 model = (ModelDoc2)_swApp.NewDocument(template, 0, 0, 0);
-        string fullPath;
-        if (saveToPdm)
-        {
-            fullPath = _pdm.SaveAsPdm(model, outFolder);
-        }
-        else
-        {
-            fullPath = Path.Combine(outFolder, fileName);
-            model.SaveAs3(fullPath, 0, 1);
-        }
+        string fullPath = Path.Combine(outFolder, fileName);
+        model.SaveAs3(fullPath, 0, 1);
 
         Console.WriteLine($"Assembly saved to: {fullPath}");
         _insertIndex = 0;

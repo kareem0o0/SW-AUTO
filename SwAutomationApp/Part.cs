@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
-using SwAutomation.Pdm; // Make sure this matches your namespace
 namespace SwAutomation;
 
 internal static class AutomationSupport
@@ -59,29 +58,26 @@ public sealed class StatorSheetPart
 {
     private const double MmToMeters = AutomationSupport.MmToMeters;
     private readonly SldWorks _swApp;
-    private readonly PdmModule _pdm;
 
-    public StatorSheetPart(SldWorks swApp, PdmModule pdm)
+    public StatorSheetPart(SldWorks swApp)
     {
         _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
-        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
     }
 
     public string OutputFolder { get; set; } = string.Empty;
     public bool CloseAfterCreate { get; set; }
-    public bool SaveToPdm { get; set; }
     public string LocalFileName { get; set; } = "StatorBleche.SLDPRT";
 
-    public double OuterDiameterMm { get; set; } = 990.0;
-    public double InnerDiameterMm { get; set; } = 640.0;
-    public double PlateThicknessMm { get; set; } = 100.0;
-    public double SlotWidthMm { get; set; } = 15.7;
-    public double SlotBottomYmm { get; set; } = 320.0;
-    public double SlotTopYmm { get; set; } = 405.2;
+    public double OuterDiameterMm { get; set; } = 0.99;
+    public double InnerDiameterMm { get; set; } = 0.64;
+    public double PlateThicknessMm { get; set; } = 0.1;
+    public double SlotWidthMm { get; set; } = 0.0157;
+    public double SlotBottomYmm { get; set; } = 0.32;
+    public double SlotTopYmm { get; set; } = 0.4052;
     public double AngleInDegrees { get; set; } = 70.0;
-    public double FilletRadiusMm { get; set; } = 1.0;
-    public double SlotGuideSpacingMm { get; set; } = 5.7;
-    public double SlotGuideOffsetMm { get; set; } = -0.7;
+    public double FilletRadiusMm { get; set; } = 0.001;
+    public double SlotGuideSpacingMm { get; set; } = 0.0057;
+    public double SlotGuideOffsetMm { get; set; } = -0.0007;
     public int SlotPatternCount { get; set; } = 60;
     public string MaterialName { get; set; } = "AISI 1020";
 
@@ -95,9 +91,8 @@ public sealed class StatorSheetPart
         using var automationUi = BeginAutomationUiSuppression();
         string outFolder = GetRequiredOutputFolder();
         bool closeAfterCreate = CloseAfterCreate;
-        bool saveToPdm = SaveToPdm;
 
-        // Main dimensions (mm) - change these only.
+        // Main dimensions (m) - change these only.
         double outerDiameterMm = OuterDiameterMm;
         double innerDiameterMm = InnerDiameterMm;
         double plateThicknessMm = PlateThicknessMm;
@@ -112,18 +107,18 @@ public sealed class StatorSheetPart
         string materialName = MaterialName;
 
         // Derived dimensions (m)
-        double outerRadius = Mm(outerDiameterMm / 2.0);
-        double innerRadius = Mm(innerDiameterMm / 2.0);
-        double plateThickness = Mm(plateThicknessMm);
-        double halfWidth = Mm(slotWidthMm / 2.0);
-        double bottomY = Mm(slotBottomYmm);
-        double topY = Mm(slotTopYmm);
+        double outerRadius = outerDiameterMm / 2.0;
+        double innerRadius = innerDiameterMm / 2.0;
+        double plateThickness = plateThicknessMm;
+        double halfWidth = slotWidthMm / 2.0;
+        double bottomY = slotBottomYmm;
+        double topY = slotTopYmm;
         double centerY = (topY + bottomY) / 2.0;
         double leftX = -halfWidth;
         double angleInRadians = angleInDegrees * Math.PI / 180.0;
-        double radiusMm = Mm(filletradius);
-        double slotGuideSpacing = Mm(slotGuideSpacingMm);
-        double slotGuideOffset = Mm(slotGuideOffsetMm);
+        double radiusMm = filletradius;
+        double slotGuideSpacing = slotGuideSpacingMm;
+        double slotGuideOffset = slotGuideOffsetMm;
 
         ModelDoc2 swModel = null;
         SketchManager swSketchManager = null;
@@ -163,13 +158,13 @@ public sealed class StatorSheetPart
             swModel.Extension.SelectByID2("", "SKETCHSEGMENT", outerRadius, 0, 0, false, 0, null, 0);
             displayDim = (DisplayDimension)swModel.AddDimension2(outerRadius + Mm(20), Mm(20), 0);
             swDim = displayDim.GetDimension();
-            swDim.SystemValue = Mm(outerDiameterMm);
+            swDim.SystemValue = outerDiameterMm;
 
             swModel.ClearSelection2(true);
             swModel.Extension.SelectByID2("", "SKETCHSEGMENT", innerRadius, 0, 0, false, 0, null, 0);
             displayDim = (DisplayDimension)swModel.AddDimension2(innerRadius + Mm(20), Mm(20), 0);
             swDim = displayDim.GetDimension();
-            swDim.SystemValue = Mm(innerDiameterMm);
+            swDim.SystemValue = innerDiameterMm;
 
             _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, false);
             swModel.ClearSelection2(true);
@@ -363,18 +358,9 @@ public sealed class StatorSheetPart
 
             swSketchManager.InsertSketch(true);
 
-            string savedPath;
-            if (saveToPdm)
-            {
-                savedPath = _pdm.SaveAsPdm(swModel, outFolder);
-                Console.WriteLine($"Part saved to PDM: {savedPath}");
-            }
-            else
-            {
-                savedPath = Path.Combine(outFolder, GetRequiredLocalFileName());
-                swModel.SaveAs3(savedPath, 0, 1);
-                Console.WriteLine($"Part saved locally: {savedPath}");
-            }
+            string savedPath = Path.Combine(outFolder, GetRequiredLocalFileName());
+            swModel.SaveAs3(savedPath, 0, 1);
+            Console.WriteLine($"Part saved locally: {savedPath}");
 
             if (closeAfterCreate)
             {
@@ -403,30 +389,27 @@ public sealed class ShaftPart
 {
     private const double MmToMeters = AutomationSupport.MmToMeters;
     private readonly SldWorks _swApp;
-    private readonly PdmModule _pdm;
 
-    public ShaftPart(SldWorks swApp, PdmModule pdm)
+    public ShaftPart(SldWorks swApp)
     {
         _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
-        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
     }
 
     public string OutputFolder { get; set; } = string.Empty;
     public bool CloseAfterCreate { get; set; }
-    public bool SaveToPdm { get; set; }
     public string LocalFileName { get; set; } = "shaft.SLDPRT";
 
-    public double Radius1Mm { get; set; } = 60.0;
-    public double Radius2Mm { get; set; } = 50.0;
-    public double Radius3Mm { get; set; } = 40.0;
-    public double Radius4Mm { get; set; } = 45.0;
-    public double Radius5Mm { get; set; } = 35.0;
+    public double Radius1Mm { get; set; } = 0.06;
+    public double Radius2Mm { get; set; } = 0.05;
+    public double Radius3Mm { get; set; } = 0.04;
+    public double Radius4Mm { get; set; } = 0.045;
+    public double Radius5Mm { get; set; } = 0.035;
 
-    public double Length1Mm { get; set; } = 180.0;
-    public double Length2Mm { get; set; } = 140.0;
-    public double Length3Mm { get; set; } = 220.0;
-    public double Length4Mm { get; set; } = 110.0;
-    public double Length5Mm { get; set; } = 150.0;
+    public double Length1Mm { get; set; } = 0.18;
+    public double Length2Mm { get; set; } = 0.14;
+    public double Length3Mm { get; set; } = 0.22;
+    public double Length4Mm { get; set; } = 0.11;
+    public double Length5Mm { get; set; } = 0.15;
     public string MaterialName { get; set; } = "AISI 1020";
 
     private string GetRequiredOutputFolder() => AutomationSupport.RequireText(OutputFolder, nameof(OutputFolder), nameof(ShaftPart));
@@ -439,26 +422,25 @@ public sealed class ShaftPart
         using var automationUi = BeginAutomationUiSuppression();
         string outFolder = GetRequiredOutputFolder();
         bool closeAfterCreate = CloseAfterCreate;
-        bool saveToPdm = SaveToPdm;
         string materialName = MaterialName;
 
 
-        // Section radii (mm) - editable.
+        // Section radii (m) - editable.
         double radius1Mm = Radius1Mm;
         double radius2Mm = Radius2Mm;
         double radius3Mm = Radius3Mm;
         double radius4Mm = Radius4Mm;
         double radius5Mm = Radius5Mm;
 
-        // Section lengths (mm) - editable.
+        // Section lengths (m) - editable.
         double length1Mm = Length1Mm;
         double length2Mm = Length2Mm;
         double length3Mm = Length3Mm;
         double length4Mm = Length4Mm;
         double length5Mm = Length5Mm;
 
-        double[] radii = { Mm(radius1Mm), Mm(radius2Mm), Mm(radius3Mm), Mm(radius4Mm), Mm(radius5Mm) };
-        double[] lengths = { Mm(length1Mm), Mm(length2Mm), Mm(length3Mm), Mm(length4Mm), Mm(length5Mm) };
+        double[] radii = { radius1Mm, radius2Mm, radius3Mm, radius4Mm, radius5Mm };
+        double[] lengths = { length1Mm, length2Mm, length3Mm, length4Mm, length5Mm };
 
         if (string.IsNullOrWhiteSpace(outFolder))
             throw new ArgumentException("Output folder is required.", nameof(outFolder));
@@ -543,18 +525,9 @@ public sealed class ShaftPart
         // Apply material to the  part
         shaftPart.SetMaterialPropertyName2("", "", Name: materialName);
 
-        string savedPath;
-        if (saveToPdm)
-        {
-            savedPath = _pdm.SaveAsPdm(swModel, outFolder);
-            Console.WriteLine($"Shaft saved to PDM: {savedPath}");
-        }
-        else
-        {
-            savedPath = Path.Combine(outFolder, GetRequiredLocalFileName());
-            swModel.SaveAs3(savedPath, 0, 1);
-            Console.WriteLine($"Shaft saved locally: {savedPath}");
-        }
+        string savedPath = Path.Combine(outFolder, GetRequiredLocalFileName());
+        swModel.SaveAs3(savedPath, 0, 1);
+        Console.WriteLine($"Shaft saved locally: {savedPath}");
 
         if (closeAfterCreate)
         {
@@ -570,22 +543,19 @@ public sealed class ShaftPart
 public sealed class SkeletonPart
 {
     private readonly SldWorks _swApp;
-    private readonly PdmModule _pdm;
 
-    public SkeletonPart(SldWorks swApp, PdmModule pdm)
+    public SkeletonPart(SldWorks swApp)
     {
         _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
-        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
     }
 
     public string OutputFolder { get; set; } = string.Empty;
     public bool CloseAfterCreate { get; set; } = false;
-    public bool SaveToPdm { get; set; }
     public string LocalFileName { get; set; } = "skeleton.SLDPRT";
 
-    public double DESideOffset { get; set; } = 500.0;
-    public double NDESideOffset { get; set; } = 500.0;
-    public double GroundOffsetMm { get; set; } = -250.0;
+    public double DESideOffset { get; set; } = 0.5;
+    public double NDESideOffset { get; set; } = 0.5;
+    public double GroundOffsetMm { get; set; } = -0.25;
 
     private string GetRequiredOutputFolder() => AutomationSupport.RequireText(OutputFolder, nameof(OutputFolder), nameof(SkeletonPart));
     private string GetRequiredLocalFileName() => AutomationSupport.RequireText(LocalFileName, nameof(LocalFileName), nameof(SkeletonPart));
@@ -597,7 +567,6 @@ public sealed class SkeletonPart
         double groundOffset = GroundOffsetMm;
         string outFolder = GetRequiredOutputFolder();
         bool closeAfterCreate = CloseAfterCreate;
-        bool saveToPdm = SaveToPdm;
         Directory.CreateDirectory(outFolder);
         string template = _swApp.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplatePart);
         ModelDoc2 swModel = (ModelDoc2)_swApp.NewDocument(template, 0, 0, 0);
@@ -643,18 +612,9 @@ public sealed class SkeletonPart
             groundPlane.Name = "Ground_Plane";
         }
 
-        string savedPath;
-        if (saveToPdm)
-        {
-            savedPath = _pdm.SaveAsPdm(swModel, outFolder);
-            Console.WriteLine($"Reference-plane part vaulted at: {savedPath}");
-        }
-        else
-        {
-            savedPath = Path.Combine(outFolder, GetRequiredLocalFileName());
-            swModel.SaveAs3(savedPath, 0, 1);
-            Console.WriteLine($"Reference-plane part saved locally at: {savedPath}");
-        }
+        string savedPath = Path.Combine(outFolder, GetRequiredLocalFileName());
+        swModel.SaveAs3(savedPath, 0, 1);
+        Console.WriteLine($"Reference-plane part saved locally at: {savedPath}");
 
         if (closeAfterCreate)
         {
@@ -671,35 +631,32 @@ public sealed class StatorDistanceSheetPart
 {
     private const double MmToMeters = AutomationSupport.MmToMeters;
     private readonly SldWorks _swApp;
-    private readonly PdmModule _pdm;
 
-    public StatorDistanceSheetPart(SldWorks swApp, PdmModule pdm)
+    public StatorDistanceSheetPart(SldWorks swApp)
     {
         _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
-        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
     }
 
     public string OutputFolder { get; set; } = string.Empty;
     public bool CloseAfterCreate { get; set; }
-    public bool SaveToPdm { get; set; }
     public string LocalFileName { get; set; } = "StatorDistanceBleche.SLDPRT";
 
-    public double OuterDiameterMm { get; set; } = 990.0;
-    public double InnerDiameterMm { get; set; } = 640.0;
-    public double PlateThicknessMm { get; set; } = 1.0;
-    public double SlotWidthMm { get; set; } = 20.5;
-    public double SlotBottomYmm { get; set; } = 320.0;
-    public double SlotTopYmm { get; set; } = 406.0;
-    public double BossRectangleHeightMm { get; set; } = 160.0;
-    public double BossRectangleWidthMm { get; set; } = 8.0;
-    public double BossOuterDiameterOffsetMm { get; set; } = 9.0;
+    public double OuterDiameterMm { get; set; } = 0.99;
+    public double InnerDiameterMm { get; set; } = 0.64;
+    public double PlateThicknessMm { get; set; } = 0.001;
+    public double SlotWidthMm { get; set; } = 0.0205;
+    public double SlotBottomYmm { get; set; } = 0.32;
+    public double SlotTopYmm { get; set; } = 0.406;
+    public double BossRectangleHeightMm { get; set; } = 0.16;
+    public double BossRectangleWidthMm { get; set; } = 0.008;
+    public double BossOuterDiameterOffsetMm { get; set; } = 0.009;
     public double BossCenterlineAngleDeg { get; set; } = 2.96;
-    public double BossExtrusionDepthMm { get; set; } = 10.0;
-    public double BossCutOuterTabWidthMm { get; set; } = 2.0;
-    public double BossCutOuterTabHeightMm { get; set; } = 2.5;
-    public double BossCutTopShelfThicknessMm { get; set; } = 1.5;
-    public double BossCutInnerLegWidthMm { get; set; } = 1.5;
-    public double BossCutBoundaryExtensionMm { get; set; } = 2.0;
+    public double BossExtrusionDepthMm { get; set; } = 0.01;
+    public double BossCutOuterTabWidthMm { get; set; } = 0.002;
+    public double BossCutOuterTabHeightMm { get; set; } = 0.0025;
+    public double BossCutTopShelfThicknessMm { get; set; } = 0.0015;
+    public double BossCutInnerLegWidthMm { get; set; } = 0.0015;
+    public double BossCutBoundaryExtensionMm { get; set; } = 0.002;
     public int BossCircularPatternCount { get; set; } = 60;
     public int SlotPatternCount { get; set; } = 60;
     public string MaterialName { get; set; } = "AISI 1020";
@@ -714,14 +671,13 @@ public sealed class StatorDistanceSheetPart
         using var automationUi = BeginAutomationUiSuppression();
         string outFolder = GetRequiredOutputFolder();
         bool closeAfterCreate = CloseAfterCreate;
-        bool saveToPdm = SaveToPdm;
         bool SelectSketchByIndex(ModelDoc2 model, int index)
         {
             return model.Extension.SelectByID2($"Skizze{index}", "SKETCH", 0, 0, 0, false, 0, null, 0)
                 || model.Extension.SelectByID2($"Sketch{index}", "SKETCH", 0, 0, 0, false, 0, null, 0);
         }
 
-        // Main dimensions (mm) - change these only.
+        // Main dimensions (m) - change these only.
         double outerDiameterMm = OuterDiameterMm;
         double innerDiameterMm = InnerDiameterMm;
         double plateThicknessMm = PlateThicknessMm;
@@ -743,19 +699,19 @@ public sealed class StatorDistanceSheetPart
         string materialName = MaterialName;
 
         // Derived dimensions (m)
-        double outerRadius = Mm(outerDiameterMm / 2.0);
-        double innerRadius = Mm(innerDiameterMm / 2.0);
-        double plateThickness = Mm(plateThicknessMm);
-        double halfWidth = Mm(slotWidthMm / 2.0);
-        double bottomY = Mm(slotBottomYmm);
-        double topY = Mm(slotTopYmm);
+        double outerRadius = outerDiameterMm / 2.0;
+        double innerRadius = innerDiameterMm / 2.0;
+        double plateThickness = plateThicknessMm;
+        double halfWidth = slotWidthMm / 2.0;
+        double bottomY = slotBottomYmm;
+        double topY = slotTopYmm;
         double centerY = (topY + bottomY) / 2.0;
         double leftX = -halfWidth;
-        double bossRectangleHeight = Mm(bossRectangleHeightMm);
-        double bossRectangleWidth = Mm(bossRectangleWidthMm);
-        double bossOuterDiameterOffset = Mm(bossOuterDiameterOffsetMm);
+        double bossRectangleHeight = bossRectangleHeightMm;
+        double bossRectangleWidth = bossRectangleWidthMm;
+        double bossOuterDiameterOffset = bossOuterDiameterOffsetMm;
         double bossCenterlineAngleRadians = bossCenterlineAngleDeg * Math.PI / 180.0;
-        double bossExtrusionDepth = Mm(bossExtrusionDepthMm);
+        double bossExtrusionDepth = bossExtrusionDepthMm;
         double bossHalfWidth = bossRectangleWidth / 2.0;
         double bossTopCenterRadius = outerRadius - bossOuterDiameterOffset;
         double bossBottomCenterRadius = bossTopCenterRadius - bossRectangleHeight;
@@ -763,11 +719,11 @@ public sealed class StatorDistanceSheetPart
         double bossDirectionY = Math.Cos(bossCenterlineAngleRadians);
         double bossNormalX = Math.Cos(bossCenterlineAngleRadians);
         double bossNormalY = Math.Sin(bossCenterlineAngleRadians);
-        double bossCutOuterTabWidth = Mm(bossCutOuterTabWidthMm);
-        double bossCutOuterTabHeight = Mm(bossCutOuterTabHeightMm);
-        double bossCutTopShelfThickness = Mm(bossCutTopShelfThicknessMm);
-        double bossCutInnerLegWidth = Mm(bossCutInnerLegWidthMm);
-        double bossCutBoundaryExtension = Mm(bossCutBoundaryExtensionMm);
+        double bossCutOuterTabWidth = bossCutOuterTabWidthMm;
+        double bossCutOuterTabHeight = bossCutOuterTabHeightMm;
+        double bossCutTopShelfThickness = bossCutTopShelfThicknessMm;
+        double bossCutInnerLegWidth = bossCutInnerLegWidthMm;
+        double bossCutBoundaryExtension = bossCutBoundaryExtensionMm;
 
         ModelDoc2 swModel = null;
         SketchManager swSketchManager = null;
@@ -804,13 +760,13 @@ public sealed class StatorDistanceSheetPart
             swModel.Extension.SelectByID2("", "SKETCHSEGMENT", outerRadius, 0, 0, false, 0, null, 0);
             displayDim = (DisplayDimension)swModel.AddDimension2(outerRadius + Mm(20), Mm(20), 0);
             swDim = displayDim.GetDimension();
-            swDim.SystemValue = Mm(outerDiameterMm);
+            swDim.SystemValue = outerDiameterMm;
 
             swModel.ClearSelection2(true);
             swModel.Extension.SelectByID2("", "SKETCHSEGMENT", innerRadius, 0, 0, false, 0, null, 0);
             displayDim = (DisplayDimension)swModel.AddDimension2(innerRadius + Mm(20), Mm(20), 0);
             swDim = displayDim.GetDimension();
-            swDim.SystemValue = Mm(innerDiameterMm);
+            swDim.SystemValue = innerDiameterMm;
 
             _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, false);
 
@@ -1570,18 +1526,9 @@ public sealed class StatorDistanceSheetPart
             swModel.ShowNamedView2("*Front", (int)swStandardViews_e.swFrontView);
             swModel.ViewZoomtofit2();
 
-            string savedPath;
-            if (saveToPdm)
-            {
-                savedPath = _pdm.SaveAsPdm(swModel, outFolder);
-                Console.WriteLine($"Part saved to PDM: {savedPath}");
-            }
-            else
-            {
-                savedPath = Path.Combine(outFolder, GetRequiredLocalFileName());
-                swModel.SaveAs3(savedPath, 0, 1);
-                Console.WriteLine($"Part saved locally: {savedPath}");
-            }
+            string savedPath = Path.Combine(outFolder, GetRequiredLocalFileName());
+            swModel.SaveAs3(savedPath, 0, 1);
+            Console.WriteLine($"Part saved locally: {savedPath}");
 
             if (closeAfterCreate)
             {
@@ -1610,25 +1557,22 @@ public sealed class StatorEndSheetPart
 {
     private const double MmToMeters = AutomationSupport.MmToMeters;
     private readonly SldWorks _swApp;
-    private readonly PdmModule _pdm;
 
-    public StatorEndSheetPart(SldWorks swApp, PdmModule pdm)
+    public StatorEndSheetPart(SldWorks swApp)
     {
         _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
-        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
     }
 
     public string OutputFolder { get; set; } = string.Empty;
     public bool CloseAfterCreate { get; set; }
-    public bool SaveToPdm { get; set; }
     public string LocalFileName { get; set; } = "StatorEndBleche.SLDPRT";
 
-    public double OuterDiameterMm { get; set; } = 990.0;
-    public double InnerDiameterMm { get; set; } = 640.0;
-    public double PlateThicknessMm { get; set; } = 1.0;
-    public double SlotWidthMm { get; set; } = 20.5;
-    public double SlotBottomYmm { get; set; } = 320.0;
-    public double SlotTopYmm { get; set; } = 406.0;
+    public double OuterDiameterMm { get; set; } = 0.99;
+    public double InnerDiameterMm { get; set; } = 0.64;
+    public double PlateThicknessMm { get; set; } = 0.001;
+    public double SlotWidthMm { get; set; } = 0.0205;
+    public double SlotBottomYmm { get; set; } = 0.32;
+    public double SlotTopYmm { get; set; } = 0.406;
     public int SlotPatternCount { get; set; } = 60;
     public string MaterialName { get; set; } = "AISI 1020";
 
@@ -1642,14 +1586,13 @@ public sealed class StatorEndSheetPart
         using var automationUi = BeginAutomationUiSuppression();
         string outFolder = GetRequiredOutputFolder();
         bool closeAfterCreate = CloseAfterCreate;
-        bool saveToPdm = SaveToPdm;
         bool SelectSketchByIndex(ModelDoc2 model, int index)
         {
             return model.Extension.SelectByID2($"Skizze{index}", "SKETCH", 0, 0, 0, false, 0, null, 0)
                 || model.Extension.SelectByID2($"Sketch{index}", "SKETCH", 0, 0, 0, false, 0, null, 0);
         }
 
-        // Main dimensions (mm) - change these only.
+        // Main dimensions (m) - change these only.
         double outerDiameterMm = OuterDiameterMm;
         double innerDiameterMm = InnerDiameterMm;
         double plateThicknessMm = PlateThicknessMm;
@@ -1660,12 +1603,12 @@ public sealed class StatorEndSheetPart
         string materialName = MaterialName;
 
         // Derived dimensions (m)
-        double outerRadius = Mm(outerDiameterMm / 2.0);
-        double innerRadius = Mm(innerDiameterMm / 2.0);
-        double plateThickness = Mm(plateThicknessMm);
-        double halfWidth = Mm(slotWidthMm / 2.0);
-        double bottomY = Mm(slotBottomYmm);
-        double topY = Mm(slotTopYmm);
+        double outerRadius = outerDiameterMm / 2.0;
+        double innerRadius = innerDiameterMm / 2.0;
+        double plateThickness = plateThicknessMm;
+        double halfWidth = slotWidthMm / 2.0;
+        double bottomY = slotBottomYmm;
+        double topY = slotTopYmm;
         double centerY = (topY + bottomY) / 2.0;
         double leftX = -halfWidth;
 
@@ -1702,13 +1645,13 @@ public sealed class StatorEndSheetPart
             swModel.Extension.SelectByID2("", "SKETCHSEGMENT", outerRadius, 0, 0, false, 0, null, 0);
             displayDim = (DisplayDimension)swModel.AddDimension2(outerRadius + Mm(20), Mm(20), 0);
             swDim = displayDim.GetDimension();
-            swDim.SystemValue = Mm(outerDiameterMm);
+            swDim.SystemValue = outerDiameterMm;
 
             swModel.ClearSelection2(true);
             swModel.Extension.SelectByID2("", "SKETCHSEGMENT", innerRadius, 0, 0, false, 0, null, 0);
             displayDim = (DisplayDimension)swModel.AddDimension2(innerRadius + Mm(20), Mm(20), 0);
             swDim = displayDim.GetDimension();
-            swDim.SystemValue = Mm(innerDiameterMm);
+            swDim.SystemValue = innerDiameterMm;
 
             _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, false);
 
@@ -1876,18 +1819,9 @@ public sealed class StatorEndSheetPart
             if (myPattern == null)
                 throw new Exception("Failed to create circular slot pattern");
 
-            string savedPath;
-            if (saveToPdm)
-            {
-                savedPath = _pdm.SaveAsPdm(swModel, outFolder);
-                Console.WriteLine($"Part saved to PDM: {savedPath}");
-            }
-            else
-            {
-                savedPath = Path.Combine(outFolder, GetRequiredLocalFileName());
-                swModel.SaveAs3(savedPath, 0, 1);
-                Console.WriteLine($"Part saved locally: {savedPath}");
-            }
+            string savedPath = Path.Combine(outFolder, GetRequiredLocalFileName());
+            swModel.SaveAs3(savedPath, 0, 1);
+            Console.WriteLine($"Part saved locally: {savedPath}");
 
             if (closeAfterCreate)
             {
@@ -1913,30 +1847,26 @@ public sealed class StatorEndSheetPart
 public sealed class TorsionBarPart
 {
     private const double MmToMeters = AutomationSupport.MmToMeters;
-    private const string DefaultDrawingTemplateFolderPath = @"C:\Users\kareem.salah\PDM\Birr Machines PDM\40_Templates\Solidworks\Blattformate\Birr Machines";
     private readonly SldWorks _swApp;
-    private readonly PdmModule _pdm;
 
-    public TorsionBarPart(SldWorks swApp, PdmModule pdm)
+    public TorsionBarPart(SldWorks swApp)
     {
         _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
-        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
     }
 
     public string OutputFolder { get; set; } = string.Empty;
     public bool CloseAfterCreate { get; set; }
-    public bool SaveToPdm { get; set; }
     public string LocalFileName { get; set; } = "TorsionBar.SLDPRT";
 
-    public double BarLengthMm { get; set; } = 1074.0;
-    public double BarHeightMm { get; set; } = 40.0;
-    public double BarThicknessMm { get; set; } = 30.0;
-    public double HoleCenterlineOffsetFromBottomMm { get; set; } = 20.0;
-    public double OuterHoleEndOffsetMm { get; set; } = 30.0;
-    public double HolePairSpacingMm { get; set; } = 315.0;
-    public double OuterHoleDiameterMm { get; set; } = 10.0;
-    public double InnerHoleDiameterMm { get; set; } = 16.0;
-    public double CenterHoleDiameterMm { get; set; } = 16.0;
+    public double BarLengthMm { get; set; } = 1.074;
+    public double BarHeightMm { get; set; } = 0.04;
+    public double BarThicknessMm { get; set; } = 0.03;
+    public double HoleCenterlineOffsetFromBottomMm { get; set; } = 0.02;
+    public double OuterHoleEndOffsetMm { get; set; } = 0.03;
+    public double HolePairSpacingMm { get; set; } = 0.315;
+    public double OuterHoleDiameterMm { get; set; } = 0.01;
+    public double InnerHoleDiameterMm { get; set; } = 0.016;
+    public double CenterHoleDiameterMm { get; set; } = 0.016;
     public string OuterTapSizePrimary { get; set; } = "M10x1.5";
     public string OuterTapSizeFallback { get; set; } = "M10";
     public string InnerTapSizePrimary { get; set; } = "M16x2";
@@ -1950,16 +1880,15 @@ public sealed class TorsionBarPart
     // drawing.cs will read these values, but it does not own them.
     public string DrawingOutputFolder { get; set; } = string.Empty;
     public bool DrawingCloseAfterCreate { get; set; }
-    public bool DrawingSaveToPdm { get; set; }
     public string DrawingLocalFileName { get; set; } = "TorsionBar.SLDDRW";
     public string DrawingSheetName { get; set; } = "Torsion Bar";
     public string DrawingLanguageCode { get; set; } = "EN";
-    public string DrawingTemplateFolderPath { get; set; } = DefaultDrawingTemplateFolderPath;
+    public string DrawingTemplateFolderPath { get; set; } = string.Empty;
     public bool DrawingPreferSolidWorksTemplateLocations { get; set; } = true;
     public string DrawingSheetFormatPathOverride { get; set; } = string.Empty;
     public string DrawingTemplatePathOverride { get; set; } = string.Empty;
     public bool DrawingUseFirstAngleProjection { get; set; }
-    public double DrawingBottomTitleBlockClearanceMm { get; set; } = 85.0;
+    public double DrawingBottomTitleBlockClearanceMm { get; set; } = 0.085;
     public string DrawingReferencedConfiguration { get; set; } = "P0002";
 
     private string GetRequiredOutputFolder() => AutomationSupport.RequireText(OutputFolder, nameof(OutputFolder), nameof(TorsionBarPart));
@@ -1971,7 +1900,7 @@ public sealed class TorsionBarPart
     // Create() builds the 3D part first, then calls the drawing method in drawing.cs.
     public string Create()
     {
-        return DrawingMethods.CreateTorsionBarDrawing(this, _swApp, _pdm);
+        return DrawingMethods.CreateTorsionBarDrawing(this, _swApp);
     }
 
     public string CreatePart()
@@ -1980,14 +1909,13 @@ public sealed class TorsionBarPart
         using var automationUi = BeginAutomationUiSuppression();
         string outFolder = GetRequiredOutputFolder();
         bool closeAfterCreate = CloseAfterCreate;
-        bool saveToPdm = SaveToPdm;
         bool SelectSketchByIndex(ModelDoc2 model, int index)
         {
             return model.Extension.SelectByID2($"Skizze{index}", "SKETCH", 0, 0, 0, false, 0, null, 0)
                 || model.Extension.SelectByID2($"Sketch{index}", "SKETCH", 0, 0, 0, false, 0, null, 0);
         }
 
-        // Main dimensions (mm) - change these only.
+        // Main dimensions (m) - change these only.
         double barLengthMm = BarLengthMm;
         double barHeightMm = BarHeightMm;
         double barThicknessMm = BarThicknessMm;
@@ -2007,16 +1935,16 @@ public sealed class TorsionBarPart
         string materialName = MaterialName;
 
         // Derived dimensions (m)
-        double barLength = Mm(barLengthMm);
-        double barHeight = Mm(barHeightMm);
-        double barThickness = Mm(barThicknessMm);
+        double barLength = barLengthMm;
+        double barHeight = barHeightMm;
+        double barThickness = barThicknessMm;
         double halfLength = barLength / 2.0;
         double halfHeight = barHeight / 2.0;
         double halfThickness = barThickness / 2.0;
-        double holeCenterlineY = -halfHeight + Mm(holeCenterlineOffsetFromBottomMm);
-        double outerHoleCenterX = halfLength - Mm(outerHoleEndOffsetMm);
-        double innerHoleCenterX = outerHoleCenterX - Mm(holePairSpacingMm);
-        double centerHoleRadius = Mm(centerHoleDiameterMm / 2.0);
+        double holeCenterlineY = -halfHeight + holeCenterlineOffsetFromBottomMm;
+        double outerHoleCenterX = halfLength - outerHoleEndOffsetMm;
+        double innerHoleCenterX = outerHoleCenterX - holePairSpacingMm;
+        double centerHoleRadius = centerHoleDiameterMm / 2.0;
 
         ModelDoc2 swModel = null;
         SketchManager swSketchManager = null;
@@ -2176,22 +2104,22 @@ public sealed class TorsionBarPart
 
             Feature leftOuterTappedHoleFeature = CreateTappedHoleFeature(
                 new[] { outerTapSizePrimary, outerTapSizeFallback },
-                Mm(outerHoleDiameterMm),
+                outerHoleDiameterMm,
                 -outerHoleCenterX,
                 "left outer M10");
             Feature rightOuterTappedHoleFeature = CreateTappedHoleFeature(
                 new[] { outerTapSizePrimary, outerTapSizeFallback },
-                Mm(outerHoleDiameterMm),
+                outerHoleDiameterMm,
                 outerHoleCenterX,
                 "right outer M10");
             Feature leftInnerTappedHoleFeature = CreateTappedHoleFeature(
                 new[] { innerTapSizePrimary, innerTapSizeFallback },
-                Mm(innerHoleDiameterMm),
+                innerHoleDiameterMm,
                 -innerHoleCenterX,
                 "left inner M16");
             Feature rightInnerTappedHoleFeature = CreateTappedHoleFeature(
                 new[] { innerTapSizePrimary, innerTapSizeFallback },
-                Mm(innerHoleDiameterMm),
+                innerHoleDiameterMm,
                 innerHoleCenterX,
                 "right inner M16");
 
@@ -2246,18 +2174,9 @@ public sealed class TorsionBarPart
             swModel.ShowNamedView2("*Front", (int)swStandardViews_e.swFrontView);
             swModel.ViewZoomtofit2();
 
-            string savedPath;
-            if (saveToPdm)
-            {
-                savedPath = _pdm.SaveAsPdm(swModel, outFolder);
-                Console.WriteLine($"Part saved to PDM: {savedPath}");
-            }
-            else
-            {
-                savedPath = Path.Combine(outFolder, GetRequiredLocalFileName());
-                swModel.SaveAs3(savedPath, 0, 1);
-                Console.WriteLine($"Part saved locally: {savedPath}");
-            }
+            string savedPath = Path.Combine(outFolder, GetRequiredLocalFileName());
+            swModel.SaveAs3(savedPath, 0, 1);
+            Console.WriteLine($"Part saved locally: {savedPath}");
 
             if (closeAfterCreate)
             {
@@ -2281,26 +2200,23 @@ public sealed class PressPlatePart
 {
     private const double MmToMeters = AutomationSupport.MmToMeters;
     private readonly SldWorks _swApp;
-    private readonly PdmModule _pdm;
 
-    public PressPlatePart(SldWorks swApp, PdmModule pdm)
+    public PressPlatePart(SldWorks swApp)
     {
         _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
-        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
     }
 
     public string OutputFolder { get; set; } = string.Empty;
     public bool CloseAfterCreate { get; set; }
-    public bool SaveToPdm { get; set; }
     public string LocalFileName { get; set; } = "PressPlate.SLDPRT";
 
-    public double OuterDiameterMm { get; set; } = 990.0;
-    public double RingInnerDiameterMm { get; set; } = 840.0;
-    public double PlateOuterInsetFromOuterDiameterMm { get; set; } = 5.0;
-    public double PlateRadialLengthMm { get; set; } = 165.0;
-    public double RingThicknessMm { get; set; } = 2.0;
-    public double PlateBodyThicknessMm { get; set; } = 10.0;
-    public double PlateWidthMm { get; set; } = 6.0;
+    public double OuterDiameterMm { get; set; } = 0.99;
+    public double RingInnerDiameterMm { get; set; } = 0.84;
+    public double PlateOuterInsetFromOuterDiameterMm { get; set; } = 0.005;
+    public double PlateRadialLengthMm { get; set; } = 0.165;
+    public double RingThicknessMm { get; set; } = 0.002;
+    public double PlateBodyThicknessMm { get; set; } = 0.01;
+    public double PlateWidthMm { get; set; } = 0.006;
     public int PlateCount { get; set; } = 60;
     public double AssemblyAngleDeg { get; set; } = 3.0;
     public string MaterialName { get; set; } = "AISI 1020";
@@ -2315,14 +2231,13 @@ public sealed class PressPlatePart
         using var automationUi = BeginAutomationUiSuppression();
         string outFolder = GetRequiredOutputFolder();
         bool closeAfterCreate = CloseAfterCreate;
-        bool saveToPdm = SaveToPdm;
         bool SelectSketchByIndex(ModelDoc2 model, int index)
         {
             return model.Extension.SelectByID2($"Skizze{index}", "SKETCH", 0, 0, 0, false, 0, null, 0)
                 || model.Extension.SelectByID2($"Sketch{index}", "SKETCH", 0, 0, 0, false, 0, null, 0);
         }
 
-        // Main dimensions (mm) - change these only.
+        // Main dimensions (m) - change these only.
         double outerDiameterMm = OuterDiameterMm;
         double ringInnerDiameterMm = RingInnerDiameterMm;
         double plateOuterInsetFromOuterDiameterMm = PlateOuterInsetFromOuterDiameterMm;
@@ -2334,13 +2249,13 @@ public sealed class PressPlatePart
         string materialName = MaterialName;
 
         // Derived dimensions (m)
-        double outerRadius = Mm(outerDiameterMm / 2.0);
-        double ringInnerRadius = Mm(ringInnerDiameterMm / 2.0);
-        double plateOuterInsetFromOuterDiameter = Mm(plateOuterInsetFromOuterDiameterMm);
-        double plateRadialLength = Mm(plateRadialLengthMm);
-        double ringThickness = Mm(ringThicknessMm);
-        double plateBodyThickness = Mm(plateBodyThicknessMm);
-        double plateHalfWidth = Mm(plateWidthMm / 2.0);
+        double outerRadius = outerDiameterMm / 2.0;
+        double ringInnerRadius = ringInnerDiameterMm / 2.0;
+        double plateOuterInsetFromOuterDiameter = plateOuterInsetFromOuterDiameterMm;
+        double plateRadialLength = plateRadialLengthMm;
+        double ringThickness = ringThicknessMm;
+        double plateBodyThickness = plateBodyThicknessMm;
+        double plateHalfWidth = plateWidthMm / 2.0;
         double plateOuterY = outerRadius - plateOuterInsetFromOuterDiameter;
         double plateInnerY = plateOuterY - plateRadialLength;
         double plateCenterY = (plateOuterY + plateInnerY) / 2.0;
@@ -2383,7 +2298,7 @@ public sealed class PressPlatePart
             if (displayDim == null) throw new Exception("Could not create press-plate outer diameter dimension");
             swDim = displayDim.GetDimension();
             if (swDim == null) throw new Exception("Could not access press-plate outer diameter dimension");
-            swDim.SystemValue = Mm(outerDiameterMm);
+            swDim.SystemValue = outerDiameterMm;
 
             swModel.ClearSelection2(true);
             selected = swModel.Extension.SelectByID2("", "SKETCHSEGMENT", ringInnerRadius, 0, 0, false, 0, null, 0);
@@ -2392,7 +2307,7 @@ public sealed class PressPlatePart
             if (displayDim == null) throw new Exception("Could not create press-plate ring inner diameter dimension");
             swDim = displayDim.GetDimension();
             if (swDim == null) throw new Exception("Could not access press-plate ring inner diameter dimension");
-            swDim.SystemValue = Mm(ringInnerDiameterMm);
+            swDim.SystemValue = ringInnerDiameterMm;
 
             swModel.ClearSelection2(true);
             if (!SelectSketchByIndex(swModel, 1))
@@ -2561,18 +2476,9 @@ public sealed class PressPlatePart
             swModel.ShowNamedView2("*Front", (int)swStandardViews_e.swFrontView);
             swModel.ViewZoomtofit2();
 
-            string savedPath;
-            if (saveToPdm)
-            {
-                savedPath = _pdm.SaveAsPdm(swModel, outFolder);
-                Console.WriteLine($"Part saved to PDM: {savedPath}");
-            }
-            else
-            {
-                savedPath = Path.Combine(outFolder, GetRequiredLocalFileName());
-                swModel.SaveAs3(savedPath, 0, 1);
-                Console.WriteLine($"Part saved locally: {savedPath}");
-            }
+            string savedPath = Path.Combine(outFolder, GetRequiredLocalFileName());
+            swModel.SaveAs3(savedPath, 0, 1);
+            Console.WriteLine($"Part saved locally: {savedPath}");
 
             if (closeAfterCreate)
             {
@@ -2598,30 +2504,27 @@ public sealed class StatorPressringNdePart
 {
     private const double MmToMeters = AutomationSupport.MmToMeters;
     private readonly SldWorks _swApp;
-    private readonly PdmModule _pdm;
 
-    public StatorPressringNdePart(SldWorks swApp, PdmModule pdm)
+    public StatorPressringNdePart(SldWorks swApp)
     {
         _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
-        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
     }
 
     public string OutputFolder { get; set; } = string.Empty;
     public bool CloseAfterCreate { get; set; }
-    public bool SaveToPdm { get; set; }
     public string LocalFileName { get; set; } = "StatorPressringNDE.SLDPRT";
 
-    public double OuterDiameterMm { get; set; } = 1100.0;
-    public double InnerDiameterMm { get; set; } = 840.0;
-    public double PressRingOuterDiameterMm { get; set; } = 860.0;
-    public double RingThicknessMm { get; set; } = 28.0;
-    public double PressRingThicknessMm { get; set; } = 2.0;
-    public double BaseInnerChamferDistanceMm { get; set; } = 20.0;
+    public double OuterDiameterMm { get; set; } = 1.1;
+    public double InnerDiameterMm { get; set; } = 0.84;
+    public double PressRingOuterDiameterMm { get; set; } = 0.86;
+    public double RingThicknessMm { get; set; } = 0.028;
+    public double PressRingThicknessMm { get; set; } = 0.002;
+    public double BaseInnerChamferDistanceMm { get; set; } = 0.02;
     public double BaseInnerChamferAngleDeg { get; set; } = 30.0;
-    public double PocketCenterRadiusMm { get; set; } = 520.0;
-    public double PocketWidthMm { get; set; } = 43.0;
-    public double PocketHeightMm { get; set; } = 36.0;
-    public double PocketCornerRadiusMm { get; set; } = 5.0;
+    public double PocketCenterRadiusMm { get; set; } = 0.52;
+    public double PocketWidthMm { get; set; } = 0.043;
+    public double PocketHeightMm { get; set; } = 0.036;
+    public double PocketCornerRadiusMm { get; set; } = 0.005;
     public int PocketCount { get; set; } = 8;
     public string MaterialName { get; set; } = "AISI 1020";
 
@@ -2635,7 +2538,6 @@ public sealed class StatorPressringNdePart
         using var automationUi = BeginAutomationUiSuppression();
         string outFolder = GetRequiredOutputFolder();
         bool closeAfterCreate = CloseAfterCreate;
-        bool saveToPdm = SaveToPdm;
 
         bool SelectSketchByIndex(ModelDoc2 model, int index)
         {
@@ -2643,7 +2545,7 @@ public sealed class StatorPressringNdePart
                 || model.Extension.SelectByID2($"Sketch{index}", "SKETCH", 0, 0, 0, false, 0, null, 0);
         }
 
-        // Main dimensions (mm) - change these only.
+        // Main dimensions (m) - change these only.
         double outerDiameterMm = OuterDiameterMm;
         double innerDiameterMm = InnerDiameterMm;
         double pressRingOuterDiameterMm = PressRingOuterDiameterMm;
@@ -2659,17 +2561,17 @@ public sealed class StatorPressringNdePart
         string materialName = MaterialName;
 
         // Derived dimensions (m)
-        double outerRadius = Mm(outerDiameterMm / 2.0);
-        double innerRadius = Mm(innerDiameterMm / 2.0);
-        double pressRingOuterRadius = Mm(pressRingOuterDiameterMm / 2.0);
-        double ringThickness = Mm(ringThicknessMm);
-        double pressRingThickness = Mm(pressRingThicknessMm);
-        double baseInnerChamferDistance = Mm(baseInnerChamferDistanceMm);
+        double outerRadius = outerDiameterMm / 2.0;
+        double innerRadius = innerDiameterMm / 2.0;
+        double pressRingOuterRadius = pressRingOuterDiameterMm / 2.0;
+        double ringThickness = ringThicknessMm;
+        double pressRingThickness = pressRingThicknessMm;
+        double baseInnerChamferDistance = baseInnerChamferDistanceMm;
         double baseInnerChamferAngleRadians = baseInnerChamferAngleDeg * Math.PI / 180.0;
-        double pocketCenterY = Mm(pocketCenterRadiusMm);
-        double pocketCornerRadius = Mm(pocketCornerRadiusMm);
-        double pocketHalfWidth = Mm(pocketWidthMm / 2.0);
-        double pocketHalfHeight = Mm(pocketHeightMm / 2.0);
+        double pocketCenterY = pocketCenterRadiusMm;
+        double pocketCornerRadius = pocketCornerRadiusMm;
+        double pocketHalfWidth = pocketWidthMm / 2.0;
+        double pocketHalfHeight = pocketHeightMm / 2.0;
         double pocketCircleTopCenterY = pocketCenterY + pocketHalfHeight;
         double pocketCircleBottomCenterY = pocketCenterY - pocketHalfHeight;
         ModelDoc2 swModel = null;
@@ -2906,7 +2808,7 @@ public sealed class StatorPressringNdePart
             swDim = displayDim.GetDimension();
             if (swDim == null)
                 throw new Exception("Could not access stator pressring NDE outer diameter dimension");
-            swDim.SystemValue = Mm(outerDiameterMm);
+            swDim.SystemValue = outerDiameterMm;
 
             swModel.ClearSelection2(true);
             selected = swModel.Extension.SelectByID2("", "SKETCHSEGMENT", innerRadius, 0, 0, false, 0, null, 0);
@@ -2918,7 +2820,7 @@ public sealed class StatorPressringNdePart
             swDim = displayDim.GetDimension();
             if (swDim == null)
                 throw new Exception("Could not access stator pressring NDE inner diameter dimension");
-            swDim.SystemValue = Mm(innerDiameterMm);
+            swDim.SystemValue = innerDiameterMm;
 
             swModel.ClearSelection2(true);
             if (!SelectSketchByIndex(swModel, 1))
@@ -3356,7 +3258,7 @@ public sealed class StatorPressringNdePart
             swDim = displayDim.GetDimension();
             if (swDim == null)
                 throw new Exception("Could not access stator pressring NDE inner press ring outer diameter dimension");
-            swDim.SystemValue = Mm(pressRingOuterDiameterMm);
+            swDim.SystemValue = pressRingOuterDiameterMm;
 
             swModel.ClearSelection2(true);
             selected = swModel.Extension.SelectByID2("", "SKETCHSEGMENT", innerRadius, 0, 0, false, 0, null, 0);
@@ -3368,7 +3270,7 @@ public sealed class StatorPressringNdePart
             swDim = displayDim.GetDimension();
             if (swDim == null)
                 throw new Exception("Could not access stator pressring NDE inner press ring inner diameter dimension");
-            swDim.SystemValue = Mm(innerDiameterMm);
+            swDim.SystemValue = innerDiameterMm;
 
             swSketchManager.InsertSketch(true);
             if (!SelectSketchByIndex(swModel, 3))
@@ -3384,18 +3286,9 @@ public sealed class StatorPressringNdePart
                 throw new Exception("Failed to create stator pressring NDE inner press ring");
 
 
-            string savedPath;
-            if (saveToPdm)
-            {
-                savedPath = _pdm.SaveAsPdm(swModel, outFolder);
-                Console.WriteLine($"Part saved to PDM: {savedPath}");
-            }
-            else
-            {
-                savedPath = Path.Combine(outFolder, GetRequiredLocalFileName());
-                swModel.SaveAs3(savedPath, 0, 1);
-                Console.WriteLine($"Part saved locally: {savedPath}");
-            }
+            string savedPath = Path.Combine(outFolder, GetRequiredLocalFileName());
+            swModel.SaveAs3(savedPath, 0, 1);
+            Console.WriteLine($"Part saved locally: {savedPath}");
 
             if (closeAfterCreate)
             {

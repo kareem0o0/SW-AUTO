@@ -4,12 +4,6 @@
     <TargetFramework>net10.0-windows</TargetFramework>
   </PropertyGroup>
 
-  <PropertyGroup>
-    <EpdmInteropPath Condition="Exists('C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS PDM\EPDM.Interop.epdm.dll')">C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS PDM\EPDM.Interop.epdm.dll</EpdmInteropPath>
-    <EpdmInteropPath Condition="'$(EpdmInteropPath)' == '' and Exists('C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS PDM (2)\EPDM.Interop.epdm.dll')">C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS PDM (2)\EPDM.Interop.epdm.dll</EpdmInteropPath>
-    <EpdmInteropPath Condition="'$(EpdmInteropPath)' == '' and Exists('C:\Program Files (x86)\SOLIDWORKS PDM\EPDM.Interop.epdm.dll')">C:\Program Files (x86)\SOLIDWORKS PDM\EPDM.Interop.epdm.dll</EpdmInteropPath>
-  </PropertyGroup>
-
   <ItemGroup>
     <Reference Include="SolidWorks.Interop.sldworks">
       <HintPath>C:\Program Files\SolidWorks Corp\SolidWorks\SolidWorks.Interop.sldworks.dll</HintPath>
@@ -17,10 +11,6 @@
     </Reference>
     <Reference Include="SolidWorks.Interop.swconst">
       <HintPath>C:\Program Files\SolidWorks Corp\SolidWorks\SolidWorks.Interop.swconst.dll</HintPath>
-      <EmbedInteropTypes>True</EmbedInteropTypes>
-    </Reference>
-    <Reference Include="EPDM.Interop.epdm" Condition="'$(EpdmInteropPath)' != ''">
-      <HintPath>$(EpdmInteropPath)</HintPath>
       <EmbedInteropTypes>True</EmbedInteropTypes>
     </Reference>
   </ItemGroup>

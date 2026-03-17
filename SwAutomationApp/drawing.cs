@@ -4,23 +4,21 @@ using System.IO;
 using System.Linq;
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
-using SwAutomation.Pdm;
 
 namespace SwAutomation;
 
 internal static class DrawingMethods
 {
-    public static string CreateTorsionBarDrawing(TorsionBarPart part, SldWorks swApp, PdmModule pdm)
+    public static string CreateTorsionBarDrawing(TorsionBarPart part, SldWorks swApp)
     {
         if (part == null)
             throw new InvalidOperationException("CreateTorsionBarDrawing requires a TorsionBarPart instance.");
         if (swApp == null)
             throw new ArgumentNullException(nameof(swApp));
-        if (pdm == null)
-            throw new ArgumentNullException(nameof(pdm));
 
         const double mmToMeters = AutomationSupport.MmToMeters;
         double Mm(double mm) => mm * mmToMeters;
+        double MetersToLayoutMm(double meters) => meters / mmToMeters;
 
         string outFolder = string.IsNullOrWhiteSpace(part.DrawingOutputFolder)
             ? AutomationSupport.RequireText(part.OutputFolder, nameof(part.OutputFolder), nameof(TorsionBarPart))
@@ -81,7 +79,7 @@ internal static class DrawingMethods
         const double configurationRowGapMm = 24.0;
         const double configurationLabelTextHeightMm = 7.0;
 
-        double bottomTitleBlockClearanceMm = Math.Max(0.0, part.DrawingBottomTitleBlockClearanceMm);
+        double bottomTitleBlockClearanceMm = Math.Max(0.0, MetersToLayoutMm(part.DrawingBottomTitleBlockClearanceMm));
         string paperCode = string.Empty;
         swDwgPaperSizes_e paperSize = swDwgPaperSizes_e.swDwgPaperA3size;
         double sheetHeightMm = 0.0;
@@ -102,10 +100,10 @@ internal static class DrawingMethods
             foreach (double candidateScaleDenominator in scaleDenominators)
             {
                 double scale = 1.0 / candidateScaleDenominator;
-                double frontWidthMm = part.BarLengthMm * scale;
-                double frontHeightMm = part.BarHeightMm * scale;
-                double sideWidthMm = part.BarThicknessMm * scale;
-                double sideHeightMm = part.BarHeightMm * scale;
+                double frontWidthMm = MetersToLayoutMm(part.BarLengthMm) * scale;
+                double frontHeightMm = MetersToLayoutMm(part.BarHeightMm) * scale;
+                double sideWidthMm = MetersToLayoutMm(part.BarThicknessMm) * scale;
+                double sideHeightMm = MetersToLayoutMm(part.BarHeightMm) * scale;
                 double rowWidthMm = leftMarginMm + frontWidthMm + sideViewGapMm + sideWidthMm + sideMarginMm;
                 double rowHeightMm = configurationLabelBandHeightMm + topDimensionBandMm + frontHeightMm + lowerCalloutBandMm;
                 double totalHeightMm = topMarginMm + rowHeightMm + configurationRowGapMm + rowHeightMm + bottomTitleBlockClearanceMm;
@@ -633,18 +631,9 @@ internal static class DrawingMethods
             drawingModel.ClearSelection2(true);
             drawingModel.ViewZoomtofit2();
 
-            string savedPath;
-            if (part.DrawingSaveToPdm)
-            {
-                savedPath = pdm.SaveAsPdm(drawingModel, outFolder);
-                Console.WriteLine($"Drawing saved to PDM: {savedPath}");
-            }
-            else
-            {
-                savedPath = Path.Combine(outFolder, drawingFileName);
-                drawingModel.SaveAs3(savedPath, 0, 1);
-                Console.WriteLine($"Drawing saved locally: {savedPath}");
-            }
+            string savedPath = Path.Combine(outFolder, drawingFileName);
+            drawingModel.SaveAs3(savedPath, 0, 1);
+            Console.WriteLine($"Drawing saved locally: {savedPath}");
 
             if (part.DrawingCloseAfterCreate)
             {
