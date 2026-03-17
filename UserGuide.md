@@ -1,20 +1,59 @@
-# SOLIDWORKS Automation User Guide
+# User Guide
 
-## Basic Usage
+## What This Project Does
 
-The project works with simple objects.
+This project creates SOLIDWORKS files automatically.
 
-The normal pattern is:
+It can currently generate:
 
-1. Create `SldWorks`
-2. Create `PdmModule`
-3. Create a part or assembly object
-4. Change any properties you want
-5. Call the object's creation method
+- parts
+- assemblies
+- torsion-bar drawings
 
-If you want to save files to PDM, log into PDM first with `pdm.Login()`.
+The system is based on simple objects.
 
-## Example Part
+The normal usage pattern is:
+
+1. create the SOLIDWORKS application
+2. create the shared PDM service
+3. create a part or assembly object
+4. change the properties you want
+5. call the create method
+
+## Project Layout
+
+The main automation project is `SwAutomationApp/`.
+
+Important locations:
+
+- `SwAutomationApp/Parts/`
+  - all part classes
+- `SwAutomationApp/Assemblies/`
+  - assembly helpers
+- `SwAutomationApp/Drawing/`
+  - drawing logic
+- `SwAutomationApp/PDM/`
+  - PDM logic
+- `SwAutomationApp/macros.cs`
+  - ready-to-edit workflow examples
+- `SwAutomationApp/MachineAssembly.cs`
+  - current application entry point
+
+## Units
+
+All linear values are now entered in meters.
+
+Examples:
+
+- `1.074` means 1074 mm
+- `0.03` means 30 mm
+- `0.99` means 990 mm
+
+Angles are still entered in degrees.
+
+This is very important when editing object properties.
+
+## Basic Part Example
 
 ```csharp
 SldWorks swApp = new SldWorks();
@@ -24,30 +63,41 @@ PdmModule pdm = new PdmModule();
 
 StatorSheetPart statorSheet = new StatorSheetPart(swApp, pdm);
 statorSheet.OutputFolder = @"C:\Users\kareem.salah\Downloads\birr machines\birr machines\parts";
-statorSheet.PlateThicknessMm = 100.0;
+statorSheet.CloseAfterCreate = true;
+statorSheet.OuterDiameter = 0.99;
+statorSheet.InnerDiameter = 0.64;
+statorSheet.PlateThickness = 0.1;
 
-string statorSheetFile = statorSheet.Create();
+string partFile = statorSheet.Create();
 ```
 
-## Example Assembly
+## Basic Assembly Example
 
 ```csharp
 AssemblyFile machine = new AssemblyFile(swApp, pdm);
 machine.OutputFolder = @"C:\Users\kareem.salah\Downloads\birr machines\birr machines\parts";
 machine.FileName = "MachineAssembly.SLDASM";
+machine.CloseAfterCreate = false;
 
-string machineFile = machine.Create();
+string assemblyFile = machine.Create();
 ```
 
-## Torsion Bar Special Case
+After `Create()`, an open assembly can be used to:
 
-`TorsionBarPart` currently has two public creation options:
+- insert parts
+- add mates
+- create patterns
+
+## Torsion Bar Special Behavior
+
+`TorsionBarPart` currently has the most advanced workflow.
+
+It supports two create options:
 
 - `CreatePart()`
   - creates only the 3D part
 - `Create()`
-  - creates the 3D part
-  - then creates the drawing too
+  - creates the 3D part and then creates the drawing
 
 Example:
 
@@ -55,15 +105,36 @@ Example:
 TorsionBarPart torsionBar = new TorsionBarPart(swApp, pdm);
 torsionBar.OutputFolder = @"C:\Users\kareem.salah\Downloads\birr machines\birr machines\parts";
 torsionBar.DrawingOutputFolder = torsionBar.OutputFolder;
-torsionBar.BarLengthMm = 1074.0;
+torsionBar.BarLength = 1.074;
+torsionBar.BarHeight = 0.04;
+torsionBar.BarThickness = 0.03;
 torsionBar.DrawingLanguageCode = "EN";
+torsionBar.DrawingCloseAfterCreate = false;
 
 string drawingFile = torsionBar.Create();
 ```
 
+## Torsion Bar Drawing Settings
+
+The torsion-bar drawing settings live on the same `TorsionBarPart` object.
+
+Common drawing properties:
+
+- `DrawingOutputFolder`
+- `DrawingSaveToPdm`
+- `DrawingCloseAfterCreate`
+- `DrawingLocalFileName`
+- `DrawingSheetName`
+- `DrawingLanguageCode`
+- `DrawingTemplateFolderPath`
+- `DrawingBottomTitleBlockClearance`
+- `DrawingReferencedConfiguration`
+
+This means you can configure both the part and the drawing from one object.
+
 ## PDM Data Card Values
 
-Every part and assembly object now owns a `PdmDataCard` property.
+Every part and assembly object owns a `PdmDataCard` property.
 
 Example:
 
@@ -73,46 +144,67 @@ statorSheet.PdmDataCard.Customer = "Birr Machines AG";
 statorSheet.PdmDataCard.CustomerOrder = "66";
 ```
 
-`TorsionBarPart` also has `DrawingPdmDataCard` for the drawing file.
+`TorsionBarPart` also has:
 
-The built-in defaults remain in place if you do not override them.
+- `DrawingPdmDataCard`
 
-For readability, only one explicit macro example is left in `Run4()` on `SkeletonPart`. You can copy that same pattern to any other object later if needed.
+The data-card object already contains default Birr values.
 
-## Macros
+So if you do not set anything manually, the defaults stay in place.
+
+## Important PDM Note
+
+If you want to save to PDM:
+
+1. create `PdmModule`
+2. call `pdm.Login()`
+3. set `SaveToPdm = true` on the object
+
+If `SaveToPdm` is `false`, the file is saved locally only.
+
+## Current Macros
+
+The easiest way to use the project is often through the macros in `SwAutomationApp/macros.cs`.
 
 ### `Run4()`
 
-Use `Run4()` when you want the full editable machine assembly flow.
+`Run4()` is the main machine assembly workflow.
 
-It:
+Use it when you want to:
 
-1. Creates all part objects
-2. Lets you edit their parameters in one place
-3. Creates the source files
-4. Creates the machine assembly
-5. Inserts components
-6. Adds mates and patterns
+- create the full machine part set
+- build the machine assembly
+- edit many object parameters in one place
+
+`Run4()` creates the objects first, then creates the files, then inserts and mates the parts into the machine assembly.
 
 ### `Run5()`
 
-Use `Run5()` when you want to test the torsion-bar drawing flow.
+`Run5()` is the torsion-bar drawing test workflow.
 
-It:
+Use it when you want to:
 
-1. Creates one `TorsionBarPart`
-2. Lets you edit both the part and drawing settings
-3. Calls `Create()`
+- test the torsion-bar part
+- test the torsion-bar drawing
+- tune drawing settings such as language, template path, and close behavior
 
-## Current Runtime Entry
+## Current Startup Behavior
 
-`SwAutomationApp/Program.cs` currently starts `Run5()`.
+The program starts from:
 
-If you want to test the machine assembly flow instead, change `Program.cs` to call `Run4(...)`.
+- `SwAutomationApp/MachineAssembly.cs`
 
-## Available Classes
+That file currently calls:
 
-Parts:
+- `Run4()`
+
+If you want the program to launch the torsion-bar drawing workflow instead, change it to call:
+
+- `Run5()`
+
+## Current Part Classes
+
+Available parts:
 
 - `SkeletonPart`
 - `StatorSheetPart`
@@ -123,12 +215,42 @@ Parts:
 - `PressPlatePart`
 - `StatorPressringNdePart`
 
-Assemblies:
+## Current Assembly Classes
+
+Available assembly-related classes:
 
 - `AssemblyFile`
+- `RotorAssembly`
+- `StatorAssembly`
+- `HousingAssembly`
 
-## Important Notes
+In most workflows, `AssemblyFile` is the main class used directly.
 
-- Properties ending with `Mm` currently use millimeter values.
-- If `SaveToPdm` is `false`, the file is saved locally only.
-- If `SaveToPdm` is `true`, make sure PDM login is already done.
+## Notes About the Macro Files
+
+Only one explicit PDM data-card example is intentionally left in `Run4()`:
+
+- the `SkeletonPart` block
+
+That is there as a reference example.
+
+If you later want to add PDM data-card overrides to another object, copy that same property-assignment pattern.
+
+## Practical Advice
+
+- if a value looks small, remember it is probably in meters now
+- if you are testing only a drawing change, use `Run5()`
+- if you are testing the full machine build, use `Run4()`
+- if you save to PDM, make sure the vault login already happened
+- if SolidWorks behaves differently on its first launch, try again after the application is fully open, because COM automation can be more sensitive on cold start
+
+## Simple Mental Model
+
+Use this as the quick mental model:
+
+- part object = owns values and creates the part
+- assembly object = creates assembly documents and helps with mates/patterns
+- drawing logic = reads part data and creates the drawing
+- macro = easy place to edit values and run a workflow
+
+That is the current structure of the project.

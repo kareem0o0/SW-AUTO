@@ -1,29 +1,26 @@
 # SwAutomationApp
 
-Windows-only SOLIDWORKS automation project for generating parts and assemblies locally.
+Windows-only SOLIDWORKS automation project for generating parts, assemblies, and drawings.
 
 ## Current Architecture
 
-The project now uses a simple object-based model inside the existing source files.
+The project now uses a modular file layout with one main class per file.
 
-- [Part.cs](c:/Users/kareem.salah/Downloads/birr%20machines/birr%20machines/SwAutomationApp/Part.cs)
-  - small internal helpers
-  - one concrete class per part
-- [Assembly.cs](c:/Users/kareem.salah/Downloads/birr%20machines/birr%20machines/SwAutomationApp/Assembly.cs)
-  - plain `AssemblyFile` class
-- [macros.cs](c:/Users/kareem.salah/Downloads/birr%20machines/birr%20machines/SwAutomationApp/macros.cs)
+- [Parts folder](/c:/Users/kareem.salah/Downloads/birr%20machines/birr%20machines/SwAutomationApp/Parts)
+  - one file per part class
+  - support helpers for shared automation utilities
+- [Assemblies folder](/c:/Users/kareem.salah/Downloads/birr%20machines/birr%20machines/SwAutomationApp/Assemblies)
+  - shared `AssemblyFile`
+  - named assembly wrapper classes
+- [PDM folder](/c:/Users/kareem.salah/Downloads/birr%20machines/birr%20machines/SwAutomationApp/PDM)
+  - PDM save logic
+  - data-card support
+- [Drawing folder](/c:/Users/kareem.salah/Downloads/birr%20machines/birr%20machines/SwAutomationApp/Drawing)
+  - drawing generation logic
+- [macros.cs](/c:/Users/kareem.salah/Downloads/birr%20machines/birr%20machines/SwAutomationApp/macros.cs)
   - editable orchestration flows
-  - `Run4()` creates the machine assembly by creating part objects, then inserting and mating them
-- [Program.cs](c:/Users/kareem.salah/Downloads/birr%20machines/birr%20machines/SwAutomationApp/Program.cs)
-  - sample runtime entry
-
-Each part or assembly is used like this:
-
-1. Instantiate its class
-2. Change properties if needed
-3. Call `Create()`
-
-Legacy property names still end with `Mm`, but the current input contract is meters.
+- [MachineAssembly.cs](/c:/Users/kareem.salah/Downloads/birr%20machines/birr%20machines/SwAutomationApp/MachineAssembly.cs)
+  - current executable entry point
 
 ## Part Classes
 
@@ -39,26 +36,32 @@ Legacy property names still end with `Mm`, but the current input contract is met
 ## Assembly Classes
 
 - `AssemblyFile`
+- `RotorAssembly`
+- `StatorAssembly`
+- `HousingAssembly`
 
 ## Example
 
 ```csharp
 SldWorks swApp = new SldWorks();
 swApp.Visible = true;
-TorsionBarPart torsionBar = new TorsionBarPart(swApp);
+
+PdmModule pdm = new PdmModule();
+
+TorsionBarPart torsionBar = new TorsionBarPart(swApp, pdm);
 torsionBar.OutputFolder = @"C:\temp\parts";
-torsionBar.BarLengthMm = 1.074;
+torsionBar.BarLengthMm = 1074.0;
 
-string torsionBarFile = torsionBar.Create();
+string torsionBarFile = torsionBar.CreatePart();
 
-AssemblyFile machine = new AssemblyFile(swApp);
+AssemblyFile machine = new AssemblyFile(swApp, pdm);
 machine.OutputFolder = @"C:\temp\parts";
 machine.FileName = "MachineAssembly.SLDASM";
 
 string machineFile = machine.Create();
 ```
 
-For a full editable machine build flow, see `Run4()` in [macros.cs](c:/Users/kareem.salah/Downloads/birr%20machines/birr%20machines/SwAutomationApp/macros.cs).
+For a full editable machine build flow, see `Run4()` in [macros.cs](/c:/Users/kareem.salah/Downloads/birr%20machines/birr%20machines/SwAutomationApp/macros.cs).
 
 ## Run
 

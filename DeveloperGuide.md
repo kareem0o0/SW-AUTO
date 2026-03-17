@@ -2,70 +2,145 @@
 
 ## Purpose
 
-This project generates SOLIDWORKS parts, assemblies, and a first drawing flow by using simple object-based classes.
+This project automates the creation of SOLIDWORKS parts, assemblies, and drawings.
 
-The main rule is:
+The codebase is organized around simple objects:
 
-- each part is its own class
-- each assembly is its own class
-- editable values live on the object as properties
-- the object reads its own properties when `Create()` is called
+- each part is its own class in its own file
+- each assembly helper is isolated in its own file
+- object properties hold the editable values
+- `Create()` reads the current object state and generates the file
 
-## Current File Layout
+The design goal is to keep the code easy to extend from two directions:
 
-- `SwAutomationApp/Part.cs`
-  - internal helpers
-  - all part classes
-  - the torsion-bar drawing entry point on `TorsionBarPart`
-- `SwAutomationApp/Assembly.cs`
-  - `AssemblyFile`
-  - insert, mate, and pattern helpers
-- `SwAutomationApp/drawing.cs`
-  - drawing implementation methods
-  - currently the torsion-bar drawing flow
-- `SwAutomationApp/Pdm.cs`
-  - `PdmModule`
-  - `BirrDataCardValues`
-  - PDM save and data-card update logic
+- a developer can add new geometry or workflows without editing one giant file
+- an external Windows application can create an object, set properties, and call the create method
+
+## Current Project Structure
+
+The main automation project lives in `SwAutomationApp/`.
+
+Important folders and files:
+
+- `SwAutomationApp/Parts/`
+  - one file per part class
+  - shared helpers such as `AutomationSupport.cs` and `AutomationUiScope.cs`
+- `SwAutomationApp/Assemblies/`
+  - `AssemblyFile.cs` for generic assembly document behavior
+  - wrapper classes such as `RotorAssembly.cs`, `StatorAssembly.cs`, and `HousingAssembly.cs`
+- `SwAutomationApp/PDM/`
+  - `Pdm.cs` for PDM login, save, and data-card updates
+- `SwAutomationApp/Drawing/`
+  - `drawing.cs` for drawing-generation logic
 - `SwAutomationApp/macros.cs`
   - editable orchestration flows
-  - `Run4()` is the main machine assembly macro
-  - `Run5()` is the torsion-bar drawing test macro
-- `SwAutomationApp/Program.cs`
-  - runtime entry point
-  - currently calls `Run5()`
+- `SwAutomationApp/MachineAssembly.cs`
+  - executable entry point
 
-## Object Pattern
+## Main Architecture
 
-Most generator objects follow this shape:
+### 1. Part objects own their data
 
-1. Construct the object with `SldWorks` and `PdmModule`
-2. Set editable properties
-3. Call `Create()`
+Each part class stores the values needed to build that part.
 
-Example:
+Typical property groups on a part object:
 
-```csharp
-StatorSheetPart statorSheet = new StatorSheetPart(swApp, pdm);
-statorSheet.OutputFolder = outFolder;
-statorSheet.PlateThicknessMm = 100.0;
+- file settings
+  - `OutputFolder`
+  - `LocalFileName`
+  - `SaveToPdm`
+  - `CloseAfterCreate`
+- geometry settings
+  - diameters
+  - offsets
+  - thickness values
+  - pattern counts
+  - material name
+- PDM data-card settings
+  - `PdmDataCard`
 
-string partPath = statorSheet.Create();
-```
+This means the part object is the single source of truth for that part.
 
-`AssemblyFile` follows the same pattern:
+### 2. Drawing logic stays outside the part file
 
-```csharp
-AssemblyFile machine = new AssemblyFile(swApp, pdm);
-machine.OutputFolder = outFolder;
-machine.FileName = "MachineAssembly.SLDASM";
+Drawing logic is implemented in `SwAutomationApp/Drawing/drawing.cs`.
 
-string assemblyPath = machine.Create();
-```
+However, the drawing-related values still live on the owning part object.
 
-## Part Layer
+The best example is `TorsionBarPart`:
 
-The part classes currently in `Part.cs` are:
+- the part owns all 3D parameters
+- the same part also owns all drawing settings
+- `drawing.cs` reads those values and creates the drawing
+
+This keeps responsibilities clean:
+
+- part class = owns data
+- drawing file = performs drawing operations
+
+### 3. Assemblies are document helpers, not workflow owners
+
+`AssemblyFile` is a reusable helper for assembly documents.
+
+It knows how to:
+
+- create an assembly document
+- save locally or to PDM
+- insert parts or subassemblies
+- create mates
+- create linear and circular patterns
+
+It does not decide the full machine structure.
+
+That orchestration stays in `macros.cs`, especially in `Run4()`.
+
+## Units
+
+This project now uses meters directly for all linear values.
+
+Important rule:
+
+- all lengths, diameters, offsets, spacing values, and thicknesses are stored in meters
+- angles are still stored in degrees where the API expects angle input from the user side
+
+Examples:
+
+- `0.99` = 990 mm
+- `0.04` = 40 mm
+- `1.074` = 1074 mm
+
+This is an important update.
+
+Older code and older documentation used millimeter-based property names and conversion helpers.
+That is no longer the current architecture.
+
+There is no `MmToMeters` helper in the current code path.
+
+## Entry Point
+
+The executable entry point is:
+
+- `SwAutomationApp/MachineAssembly.cs`
+
+It is intentionally small.
+
+Its job is:
+
+1. create the SOLIDWORKS application object
+2. create the shared `PdmModule`
+3. choose which macro to run
+
+At the moment it starts:
+
+- `Project1.Run4(...)`
+
+If you want the executable to launch the torsion-bar drawing test instead, change that one call to:
+
+- `Project1.Run5(...)`
+
+## Parts
+
+Current part classes:
 
 - `SkeletonPart`
 - `StatorSheetPart`
@@ -76,121 +151,253 @@ The part classes currently in `Part.cs` are:
 - `PressPlatePart`
 - `StatorPressringNdePart`
 
-Each part owns:
+Each file contains one class only.
 
-- file settings such as `OutputFolder`, `LocalFileName`, `CloseAfterCreate`, `SaveToPdm`
-- geometry parameters
-- `PdmDataCard`
+This makes it much easier to:
 
-`TorsionBarPart` also owns:
+- find a specific part
+- add properties to one part without affecting others
+- debug one geometry generator at a time
 
-- drawing settings such as `DrawingOutputFolder`, `DrawingLanguageCode`, and drawing template settings
-- `DrawingPdmDataCard`
+## Assemblies
 
-`TorsionBarPart` has two public creation entry points:
-
-- `CreatePart()`
-  - creates only the 3D part
-- `Create()`
-  - creates the 3D part first
-  - then calls the torsion-bar drawing logic in `drawing.cs`
-
-## Assembly Layer
-
-The assembly layer is currently one simple class:
+Current assembly files:
 
 - `AssemblyFile`
+- `RotorAssembly`
+- `StatorAssembly`
+- `HousingAssembly`
 
-`AssemblyFile` owns:
+Important note:
 
-- file settings such as `OutputFolder`, `FileName`, `CloseAfterCreate`, `SaveToPdm`
-- `PdmDataCard`
-- document creation
-- component insertion
-- mate helpers
-- pattern helpers
+- `AssemblyFile` is the real shared implementation
+- the wrapper assembly classes currently exist mainly to give named identities and clearer structure
+
+The actual full machine build is still assembled in `Run4()`.
+
+## PDM Layer
+
+The PDM logic is in:
+
+- `SwAutomationApp/PDM/Pdm.cs`
+
+This file contains two important types.
+
+### `BirrDataCardValues`
+
+This is a plain object that stores the Birr PDM data-card fields as properties.
+
+Current fields include:
+
+- `DrawingNumber`
+- `Title`
+- `Subtitle`
+- `Project`
+- `Customer`
+- `CustomerOrder`
+- `Type`
+- `Unit`
+- `CreatedFrom`
+- `ReplacementFor`
+- `DataCheck`
+
+These properties already have default values.
+
+That means:
+
+- if a macro does nothing, the defaults remain
+- if an external system sets values, those override the defaults
+
+### `PdmModule`
+
+This class handles:
+
+- vault login
+- saving a live SOLIDWORKS document into PDM
+- reading data-card values
+- writing data-card values
+
+When `SaveToPdm` is `true`, the object's `PdmDataCard` values are pushed into the PDM file.
+
+## PDM Pattern in Macros
+
+Only one explicit PDM data-card assignment block is intentionally left in `Run4()`:
+
+- the `SkeletonPart` block
+
+That block acts as the example/reference pattern.
+
+If you want to apply the same idea to another object later, copy that same property assignment style to that object.
+
+This was done on purpose to keep the macro readable instead of repeating the same data-card block on every object.
 
 ## Drawing Layer
 
-The drawing implementation stays in `SwAutomationApp/drawing.cs`.
+The drawing implementation is currently focused on the torsion bar.
 
-Right now only the torsion-bar drawing is implemented.
+File:
 
-Responsibility split:
+- `SwAutomationApp/Drawing/drawing.cs`
 
-- `TorsionBarPart`
-  - owns the drawing-related data
-  - exposes the public creation entry points
-- `drawing.cs`
-  - contains the actual drawing-generation logic
+Current idea:
 
-This keeps the part object as the data owner while keeping drawing implementation code out of `Part.cs`.
+- `TorsionBarPart.CreatePart()` creates only the 3D part
+- `TorsionBarPart.Create()` creates the part and then calls the drawing logic
 
-## PDM Data Card Pattern
+The drawing logic currently:
 
-`BirrDataCardValues` in `SwAutomationApp/Pdm.cs` stores the Birr data-card fields as object properties.
+1. ensures the part exists
+2. selects a sheet size and scale
+3. resolves the drawing template and sheet format
+4. creates the drawing
+5. inserts the front view
+6. creates projected views from that base view
+7. saves the drawing locally or to PDM
 
-Defaults are already built into that class, so if a macro or external app does not set anything, the default values remain in place.
+The code also supports:
 
-When `SaveToPdm` is `true`, the save path calls `PdmModule.SaveAsPdm(...)`, which also pushes the object's data-card values into PDM.
+- English and German sheet formats through `DrawingLanguageCode`
+- template folder configuration
+- drawing-specific output settings
 
-In `Run4()`, only `SkeletonPart` keeps an explicit `PdmDataCard` block in the macro. That block is there as the reference example if you want to copy the same pattern to another object later.
+## `TorsionBarPart` Special Case
+
+`TorsionBarPart` is currently the most advanced example in the project.
+
+It owns:
+
+- part geometry properties
+- part save properties
+- drawing properties
+- part PDM data card
+- drawing PDM data card
+
+Its public entry points are:
+
+- `CreatePart()`
+  - creates only the part
+- `Create()`
+  - creates the part and then the drawing
+
+This is the cleanest current example of the project's intended architecture.
 
 ## Macros
 
+Macros are kept in:
+
+- `SwAutomationApp/macros.cs`
+
+They are not low-level geometry files.
+They are workflow files.
+
+Their purpose is to show how the part and assembly objects can be used together.
+
 ### `Run4()`
 
-`Run4()` is the main editable machine-build macro.
+`Run4()` is the main machine-assembly flow.
 
-Flow:
+It is intentionally written as a readable orchestration script.
 
-1. Create all part and assembly objects
-2. Edit their properties
-3. Create the source files
-4. Create the machine assembly
-5. Insert components
-6. Apply mates
-7. Apply patterns
+High-level flow:
 
-The assembly logic stays in the macro on purpose so it is easy to read and easy to edit.
+1. create all part objects
+2. assign their editable properties
+3. create the source files
+4. create the target machine assembly
+5. insert the components
+6. apply mates
+7. create patterns
+
+This macro is a good place for:
+
+- changing machine dimensions
+- changing stack counts
+- changing material names
+- copying the PDM data-card pattern
 
 ### `Run5()`
 
-`Run5()` is the torsion-bar drawing test macro.
+`Run5()` is the torsion-bar drawing test flow.
 
-Flow:
+It creates one `TorsionBarPart`, sets both part and drawing properties, and then calls:
 
-1. Create one `TorsionBarPart` object
-2. Edit its 3D properties
-3. Edit its drawing properties
-4. Call `torsionBar.Create()`
+- `torsionBar.Create()`
+
+Use this flow when working on:
+
+- torsion-bar geometry
+- template selection
+- drawing layout
+- drawing save behavior
+
+## Example Usage Pattern
+
+The preferred style in this project is explicit property assignment.
+
+Example:
+
+```csharp
+TorsionBarPart torsionBar = new TorsionBarPart(swApp, pdm);
+torsionBar.OutputFolder = outFolder;
+torsionBar.SaveToPdm = false;
+torsionBar.CloseAfterCreate = true;
+torsionBar.BarLength = 1.074;
+torsionBar.BarHeight = 0.04;
+torsionBar.BarThickness = 0.03;
+
+string partPath = torsionBar.CreatePart();
+```
+
+For a drawing flow:
+
+```csharp
+TorsionBarPart torsionBar = new TorsionBarPart(swApp, pdm);
+torsionBar.OutputFolder = outFolder;
+torsionBar.DrawingOutputFolder = outFolder;
+torsionBar.DrawingLanguageCode = "EN";
+torsionBar.DrawingCloseAfterCreate = false;
+
+string drawingPath = torsionBar.Create();
+```
 
 ## Extending the Code
 
-### To add a new part
+### Add a new part
 
-1. Add a new class in `Part.cs`
-2. Add its editable properties
-3. Add property defaults
-4. Add `PdmDataCard`
-5. Put the SOLIDWORKS creation logic inside `Create()`
+1. Create a new file under `SwAutomationApp/Parts/`
+2. Add one class only in that file
+3. Add the editable properties
+4. Give the properties sensible defaults
+5. Add `PdmDataCard`
+6. Implement the SOLIDWORKS geometry creation inside `Create()`
 
-### To add drawing support for a part
+### Add drawing support to a part
 
-1. Keep the drawing-related properties on the part class
-2. Add a clean entry method on the part if needed
-3. Put the actual drawing implementation in `drawing.cs`
+1. keep drawing-related settings on the part object
+2. keep detailed drawing logic in `SwAutomationApp/Drawing/drawing.cs`
+3. add or reuse a clean entry point on the part class
 
-### To add a new macro flow
+### Add a new assembly wrapper
 
-1. Create the needed objects in `macros.cs`
-2. Set their properties directly in the macro
-3. Call their creation methods
-4. Keep the orchestration in the macro if that is the clearest place for it
+1. add a file under `SwAutomationApp/Assemblies/`
+2. reuse `AssemblyFile` where possible
+3. keep large orchestration logic in macros unless there is a strong reason to move it
 
-## Important Notes
+## Common Development Notes
 
-- Properties ending with `Mm` currently use millimeter values.
-- Many SOLIDWORKS selections still depend on German default plane or reference names.
-- If a workflow will save to PDM, `PdmModule.Login()` must be called before saving.
-- There are still no automated geometry tests; validation is still done by running the automation and checking the created SOLIDWORKS files.
+- many reference selections still rely on SolidWorks plane or axis names such as German default names
+- projected drawing views work more reliably when the source model stays open
+- PDM save flows require `pdm.Login()` before saving
+- SolidWorks automation can behave differently on a fresh first launch, so some creation flows include stability steps such as explicit document activation and rebuilds
+
+## Mental Model
+
+If you are new to the project, this is the easiest way to think about it:
+
+- part class = data owner + 3D generator
+- drawing file = drawing engine
+- assembly file = assembly document helper
+- macro = workflow/orchestration layer
+- machine entry file = startup switchboard
+
+That mental model matches the current codebase and should be followed for future additions.
