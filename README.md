@@ -1,6 +1,6 @@
 # SwAutomationApp
 
-Windows-only SOLIDWORKS automation project for generating parts and assemblies locally or in SOLIDWORKS PDM.
+Windows-only SOLIDWORKS automation project for generating parts and assemblies locally.
 
 ## Current Architecture
 
@@ -23,6 +23,8 @@ Each part or assembly is used like this:
 2. Change properties if needed
 3. Call `Create()`
 
+Legacy property names still end with `Mm`, but the current input contract is meters.
+
 ## Part Classes
 
 - `SkeletonPart`
@@ -43,15 +45,13 @@ Each part or assembly is used like this:
 ```csharp
 SldWorks swApp = new SldWorks();
 swApp.Visible = true;
-PdmModule pdm = new PdmModule();
-
-TorsionBarPart torsionBar = new TorsionBarPart(swApp, pdm);
+TorsionBarPart torsionBar = new TorsionBarPart(swApp);
 torsionBar.OutputFolder = @"C:\temp\parts";
-torsionBar.BarLengthMm = 1074.0;
+torsionBar.BarLengthMm = 1.074;
 
 string torsionBarFile = torsionBar.Create();
 
-AssemblyFile machine = new AssemblyFile(swApp, pdm);
+AssemblyFile machine = new AssemblyFile(swApp);
 machine.OutputFolder = @"C:\temp\parts";
 machine.FileName = "MachineAssembly.SLDASM";
 

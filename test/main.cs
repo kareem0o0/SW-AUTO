@@ -33,8 +33,9 @@ internal static class Macro
             throw new ArgumentException("Output folder is required.", nameof(outFolder));
 
         string skeleton = part.CreateSkeleton(
-            sideOffset: 500.0,
-            groundOffset: -250.0,
+            ndeSideOffset: 0.5,
+            deSideOffset: 0.5,
+            groundOffset: -0.25,
             outFolder: outFolder,
             closeAfterCreate: true);
 

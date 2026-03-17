@@ -26,6 +26,7 @@ public sealed class AssemblyFile
     public bool CloseAfterCreate { get; set; }
     public bool SaveToPdm { get; set; }
     public string FileName { get; set; } = "Assembly.SLDASM";
+    public BirrDataCardValues PdmDataCard { get; set; } = BirrDataCardValues.CreateDefault();
 
     private string GetRequiredOutputFolder() => AutomationSupport.RequireText(OutputFolder, nameof(OutputFolder), nameof(AssemblyFile));
     private string GetRequiredFileName()
@@ -46,7 +47,7 @@ public sealed class AssemblyFile
         string fullPath;
         if (saveToPdm)
         {
-            fullPath = _pdm.SaveAsPdm(model, outFolder);
+            fullPath = _pdm.SaveAsPdm(model, outFolder, PdmDataCard);
         }
         else
         {

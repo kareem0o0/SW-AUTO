@@ -6,14 +6,13 @@ namespace SwAutomation.TestHarness;
 internal sealed class Part
 {
     private readonly SldWorks _swApp;
-    private const double MmToMeters = 0.001;
 
     public Part(SldWorks swApp)
     {
         _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
     }
 
-    public string CreateSkeleton(double sideOffset, double groundOffset, string outFolder, bool closeAfterCreate = false)
+    public string CreateSkeleton(double ndeSideOffset, double deSideOffset, double groundOffset, string outFolder, bool closeAfterCreate = false)
     {
         Directory.CreateDirectory(outFolder);
 
@@ -24,7 +23,7 @@ internal sealed class Part
         model.Extension.SelectByID2("Ebene rechts", "PLANE", 0, 0, 0, false, 0, null, 0);
         Feature sideRight = model.FeatureManager.InsertRefPlane(
             (int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Distance,
-            sideOffset * MmToMeters,
+            ndeSideOffset,
             0,
             0,
             0,
@@ -33,14 +32,14 @@ internal sealed class Part
         sideRight.Name = "NDE_BEARING_CENTER";
 
         model.Extension.SelectByID2("Ebene rechts", "PLANE", 0, 0, 0, false, 0, null, 0);
-        Feature sideLeft = model.FeatureManager.InsertRefPlane(264, sideOffset * MmToMeters, 0, 0, 0, 0);
+        Feature sideLeft = model.FeatureManager.InsertRefPlane(264, deSideOffset, 0, 0, 0, 0);
         model.ClearSelection2(true);
         sideLeft.Name = "DE_BEARING_CENTER";
 
         model.Extension.SelectByID2("Ebene oben", "PLANE", 0, 0, 0, false, 0, null, 0);
         Feature groundPlane = groundOffset > 0
-            ? model.FeatureManager.InsertRefPlane(8, groundOffset * MmToMeters, 0, 0, 0, 0)
-            : model.FeatureManager.InsertRefPlane(264, -groundOffset * MmToMeters, 0, 0, 0, 0);
+            ? model.FeatureManager.InsertRefPlane(8, groundOffset, 0, 0, 0, 0)
+            : model.FeatureManager.InsertRefPlane(264, -groundOffset, 0, 0, 0, 0);
         model.ClearSelection2(true);
         groundPlane.Name = "Ground_Plane";
 

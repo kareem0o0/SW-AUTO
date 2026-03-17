@@ -71,6 +71,7 @@ public sealed class StatorSheetPart
     public bool CloseAfterCreate { get; set; }
     public bool SaveToPdm { get; set; }
     public string LocalFileName { get; set; } = "StatorBleche.SLDPRT";
+    public BirrDataCardValues PdmDataCard { get; set; } = BirrDataCardValues.CreateDefault();
 
     public double OuterDiameterMm { get; set; } = 990.0;
     public double InnerDiameterMm { get; set; } = 640.0;
@@ -366,7 +367,7 @@ public sealed class StatorSheetPart
             string savedPath;
             if (saveToPdm)
             {
-                savedPath = _pdm.SaveAsPdm(swModel, outFolder);
+                savedPath = _pdm.SaveAsPdm(swModel, outFolder, PdmDataCard);
                 Console.WriteLine($"Part saved to PDM: {savedPath}");
             }
             else
@@ -415,6 +416,7 @@ public sealed class ShaftPart
     public bool CloseAfterCreate { get; set; }
     public bool SaveToPdm { get; set; }
     public string LocalFileName { get; set; } = "shaft.SLDPRT";
+    public BirrDataCardValues PdmDataCard { get; set; } = BirrDataCardValues.CreateDefault();
 
     public double Radius1Mm { get; set; } = 60.0;
     public double Radius2Mm { get; set; } = 50.0;
@@ -546,7 +548,7 @@ public sealed class ShaftPart
         string savedPath;
         if (saveToPdm)
         {
-            savedPath = _pdm.SaveAsPdm(swModel, outFolder);
+            savedPath = _pdm.SaveAsPdm(swModel, outFolder, PdmDataCard);
             Console.WriteLine($"Shaft saved to PDM: {savedPath}");
         }
         else
@@ -583,6 +585,7 @@ public sealed class SkeletonPart
     public bool CloseAfterCreate { get; set; } = false;
     public bool SaveToPdm { get; set; }
     public string LocalFileName { get; set; } = "skeleton.SLDPRT";
+    public BirrDataCardValues PdmDataCard { get; set; } = BirrDataCardValues.CreateDefault();
 
     public double SideOffsetMm { get; set; } = 500.0;
     public double GroundOffsetMm { get; set; } = -250.0;
@@ -646,7 +649,7 @@ public sealed class SkeletonPart
         string savedPath;
         if (saveToPdm)
         {
-            savedPath = _pdm.SaveAsPdm(swModel, outFolder);
+            savedPath = _pdm.SaveAsPdm(swModel, outFolder, PdmDataCard);
             Console.WriteLine($"Reference-plane part vaulted at: {savedPath}");
         }
         else
@@ -683,6 +686,7 @@ public sealed class StatorDistanceSheetPart
     public bool CloseAfterCreate { get; set; }
     public bool SaveToPdm { get; set; }
     public string LocalFileName { get; set; } = "StatorDistanceBleche.SLDPRT";
+    public BirrDataCardValues PdmDataCard { get; set; } = BirrDataCardValues.CreateDefault();
 
     public double OuterDiameterMm { get; set; } = 990.0;
     public double InnerDiameterMm { get; set; } = 640.0;
@@ -1573,7 +1577,7 @@ public sealed class StatorDistanceSheetPart
             string savedPath;
             if (saveToPdm)
             {
-                savedPath = _pdm.SaveAsPdm(swModel, outFolder);
+                savedPath = _pdm.SaveAsPdm(swModel, outFolder, PdmDataCard);
                 Console.WriteLine($"Part saved to PDM: {savedPath}");
             }
             else
@@ -1622,6 +1626,7 @@ public sealed class StatorEndSheetPart
     public bool CloseAfterCreate { get; set; }
     public bool SaveToPdm { get; set; }
     public string LocalFileName { get; set; } = "StatorEndBleche.SLDPRT";
+    public BirrDataCardValues PdmDataCard { get; set; } = BirrDataCardValues.CreateDefault();
 
     public double OuterDiameterMm { get; set; } = 990.0;
     public double InnerDiameterMm { get; set; } = 640.0;
@@ -1879,7 +1884,7 @@ public sealed class StatorEndSheetPart
             string savedPath;
             if (saveToPdm)
             {
-                savedPath = _pdm.SaveAsPdm(swModel, outFolder);
+                savedPath = _pdm.SaveAsPdm(swModel, outFolder, PdmDataCard);
                 Console.WriteLine($"Part saved to PDM: {savedPath}");
             }
             else
@@ -1927,6 +1932,7 @@ public sealed class TorsionBarPart
     public bool CloseAfterCreate { get; set; }
     public bool SaveToPdm { get; set; }
     public string LocalFileName { get; set; } = "TorsionBar.SLDPRT";
+    public BirrDataCardValues PdmDataCard { get; set; } = BirrDataCardValues.CreateDefault();
 
     public double BarLengthMm { get; set; } = 1074.0;
     public double BarHeightMm { get; set; } = 40.0;
@@ -1952,6 +1958,7 @@ public sealed class TorsionBarPart
     public bool DrawingCloseAfterCreate { get; set; }
     public bool DrawingSaveToPdm { get; set; }
     public string DrawingLocalFileName { get; set; } = "TorsionBar.SLDDRW";
+    public BirrDataCardValues DrawingPdmDataCard { get; set; } = BirrDataCardValues.CreateDefault();
     public string DrawingSheetName { get; set; } = "Torsion Bar";
     public string DrawingLanguageCode { get; set; } = "EN";
     public string DrawingTemplateFolderPath { get; set; } = DefaultDrawingTemplateFolderPath;
@@ -2249,7 +2256,7 @@ public sealed class TorsionBarPart
             string savedPath;
             if (saveToPdm)
             {
-                savedPath = _pdm.SaveAsPdm(swModel, outFolder);
+                savedPath = _pdm.SaveAsPdm(swModel, outFolder, PdmDataCard);
                 Console.WriteLine($"Part saved to PDM: {savedPath}");
             }
             else
@@ -2293,6 +2300,7 @@ public sealed class PressPlatePart
     public bool CloseAfterCreate { get; set; }
     public bool SaveToPdm { get; set; }
     public string LocalFileName { get; set; } = "PressPlate.SLDPRT";
+    public BirrDataCardValues PdmDataCard { get; set; } = BirrDataCardValues.CreateDefault();
 
     public double OuterDiameterMm { get; set; } = 990.0;
     public double RingInnerDiameterMm { get; set; } = 840.0;
@@ -2564,7 +2572,7 @@ public sealed class PressPlatePart
             string savedPath;
             if (saveToPdm)
             {
-                savedPath = _pdm.SaveAsPdm(swModel, outFolder);
+                savedPath = _pdm.SaveAsPdm(swModel, outFolder, PdmDataCard);
                 Console.WriteLine($"Part saved to PDM: {savedPath}");
             }
             else
@@ -2610,6 +2618,7 @@ public sealed class StatorPressringNdePart
     public bool CloseAfterCreate { get; set; }
     public bool SaveToPdm { get; set; }
     public string LocalFileName { get; set; } = "StatorPressringNDE.SLDPRT";
+    public BirrDataCardValues PdmDataCard { get; set; } = BirrDataCardValues.CreateDefault();
 
     public double OuterDiameterMm { get; set; } = 1100.0;
     public double InnerDiameterMm { get; set; } = 840.0;
@@ -3387,7 +3396,7 @@ public sealed class StatorPressringNdePart
             string savedPath;
             if (saveToPdm)
             {
-                savedPath = _pdm.SaveAsPdm(swModel, outFolder);
+                savedPath = _pdm.SaveAsPdm(swModel, outFolder, PdmDataCard);
                 Console.WriteLine($"Part saved to PDM: {savedPath}");
             }
             else

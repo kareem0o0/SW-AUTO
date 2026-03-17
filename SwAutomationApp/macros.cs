@@ -121,6 +121,20 @@ public static class Project1
         skeleton.LocalFileName = "skeleton.SLDPRT";
         skeleton.SideOffsetMm = 2000.0;
         skeleton.GroundOffsetMm = -500.0;
+        // Optional PDM datacard example:
+        // leave this only on the skeleton as a reference block.
+        // If you later want the same behavior on another object, copy these lines to that object too.
+        skeleton.PdmDataCard.DrawingNumber = "";
+        skeleton.PdmDataCard.Title = "Skeleton";
+        skeleton.PdmDataCard.Subtitle = "Automated Generation";
+        skeleton.PdmDataCard.Project = "665_Birr_Project";
+        skeleton.PdmDataCard.Customer = "Birr Machines AG";
+        skeleton.PdmDataCard.CustomerOrder = "66";
+        skeleton.PdmDataCard.Type = "44";
+        skeleton.PdmDataCard.Unit = "kg";
+        skeleton.PdmDataCard.CreatedFrom = "22";
+        skeleton.PdmDataCard.ReplacementFor = "11";
+        skeleton.PdmDataCard.DataCheck = "X";
 
         // Main stator lamination used as the thick core pack.
         StatorSheetPart statorSheet = new StatorSheetPart(swApp, pdm);
@@ -252,7 +266,8 @@ public static class Project1
 
         double Mm(double mm) => mm / 1000.0;
 
-        // Keep stack spacing derived from the current part settings.
+        // These values are derived from the editable object settings above.
+        // If you change part thicknesses or pocket counts, the assembly spacing below follows automatically.
         double statorSheetPackThicknessMm = statorSheet.PlateThicknessMm;
         double statorDistanceSheetStackThicknessMm = statorDistanceSheet.PlateThicknessMm + statorDistanceSheet.BossExtrusionDepthMm;
         double statorEndSheetStackThicknessMm = statorEndSheet.PlateThicknessMm;
@@ -262,7 +277,7 @@ public static class Project1
         double torsionBarSlotRadiusMm = pressRingNde.PocketCenterRadiusMm;
         int torsionBarPatternCount = pressRingNde.PocketCount;
 
-        // Create all source documents before starting assembly placement.
+        // Create each source file first, then start inserting those saved files into the assembly.
         string skeletonPath = skeleton.Create();
         string statorSheetPath = statorSheet.Create();
         string statorDistanceSheetPath = statorDistanceSheet.Create();
@@ -368,7 +383,7 @@ public static class Project1
         if (string.IsNullOrWhiteSpace(outFolder))
             throw new ArgumentException("Output folder is required.", nameof(outFolder));
 
-        // This is the object you edit.
+        // This is the object you edit for the drawing test.
         // It owns everything for the torsion bar:
         // 1. the 3D model parameters
         // 2. the 2D drawing parameters

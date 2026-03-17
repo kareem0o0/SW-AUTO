@@ -354,7 +354,7 @@ internal static class DrawingMethods
             string savedPath;
             if (part.DrawingSaveToPdm)
             {
-                savedPath = pdm.SaveAsPdm(drawingModel, outFolder);
+                savedPath = pdm.SaveAsPdm(drawingModel, outFolder, part.DrawingPdmDataCard);
                 Console.WriteLine($"Drawing saved to PDM: {savedPath}");
             }
             else
