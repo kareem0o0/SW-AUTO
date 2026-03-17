@@ -2035,6 +2035,15 @@ public sealed class TorsionBarPart
             if (swModel == null)
                 throw new Exception("Failed to create new part");
 
+            int activateDocError = 0;
+            ModelDoc2 activePartModel = (ModelDoc2)_swApp.ActivateDoc3(
+                swModel.GetTitle(),
+                true,
+                (int)swRebuildOnActivation_e.swDontRebuildActiveDoc,
+                ref activateDocError);
+            if (activePartModel == null)
+                throw new Exception($"Could not activate the torsion-bar part document. ActivateDoc3 error code: {activateDocError}");
+
             swSketchManager = swModel.SketchManager;
 
             PartDoc torsionBarPart = swModel as PartDoc;
@@ -2086,6 +2095,9 @@ public sealed class TorsionBarPart
             if (baseExtrude == null)
                 throw new Exception("Failed to create torsion-bar base extrusion");
 
+            swModel.ClearSelection2(true);
+            swModel.EditRebuild3();
+
             Feature CreateTappedHoleFeature(string[] sizeCandidates, double nominalDiameter, double centerX, string holeLabel)
             {
                 foreach (string sizeCandidate in sizeCandidates)
@@ -2118,16 +2130,37 @@ public sealed class TorsionBarPart
                 throw new Exception($"Failed to create {holeLabel} hole-wizard feature");
             }
 
-            swModel.ClearSelection2(true);
-            selected = swModel.Extension.SelectByID2("", "FACE", 0, 0, halfThickness, false, 0, null, 0);
-            if (!selected) throw new Exception("Could not select torsion-bar front face for center-hole sketch");
+            object centerHole = null;
+            for (int attempt = 0; attempt < 2 && centerHole == null; attempt++)
+            {
+                swModel.ClearSelection2(true);
+                selected = swModel.Extension.SelectByID2("", "FACE", 0, 0, halfThickness, false, 0, null, 0);
+                if (!selected)
+                    throw new Exception("Could not select torsion-bar front face for center-hole sketch");
 
-            swSketchManager.InsertSketch(true);
-            object centerHole = swSketchManager.CreateCircleByRadius(0, holeCenterlineY, 0, centerHoleRadius);
+                swModel.InsertSketch2(true);
+
+                if (swModel.GetActiveSketch2() == null)
+                {
+                    swModel.EditRebuild3();
+                    continue;
+                }
+
+                centerHole = swSketchManager.CreateCircleByRadius(0, holeCenterlineY, 0, centerHoleRadius);
+                if (centerHole == null)
+                    centerHole = swModel.CreateCircleByRadius2(0, holeCenterlineY, 0, centerHoleRadius);
+
+                if (centerHole == null)
+                {
+                    swModel.InsertSketch2(true);
+                    swModel.EditRebuild3();
+                }
+            }
+
             if (centerHole == null)
                 throw new Exception("Could not create torsion-bar center-hole sketch");
 
-            swSketchManager.InsertSketch(true);
+            swModel.InsertSketch2(true);
             if (!SelectSketchByIndex(swModel, 2))
                 throw new Exception("Could not select torsion-bar center-hole sketch");
             Feature centerHoleCutFeature = swModel.FeatureManager.FeatureCut4(

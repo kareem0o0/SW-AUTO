@@ -72,6 +72,7 @@ internal static class DrawingMethods
         const double sideMarginMm = 20.0;
         const double leftMarginMm = 25.0;
         const double topMarginMm = 45.0;
+        const double projectedViewGapMm = 12.0;
         double bottomTitleBlockClearanceMm = Math.Max(0.0, part.DrawingBottomTitleBlockClearanceMm);
 
         string paperCode = string.Empty;
@@ -82,6 +83,10 @@ internal static class DrawingMethods
         double scaleDenominator = 1.0;
         double frontXmm = 0.0;
         double frontYmm = 0.0;
+        double topXmm = 0.0;
+        double topYmm = 0.0;
+        double sideXmm = 0.0;
+        double sideYmm = 0.0;
         bool layoutFound = false;
 
         foreach (var sheet in sheets)
@@ -91,8 +96,10 @@ internal static class DrawingMethods
                 double scale = 1.0 / candidateScaleDenominator;
                 double frontWidthMm = part.BarLengthMm * scale;
                 double frontHeightMm = part.BarHeightMm * scale;
-                double totalWidthMm = leftMarginMm + frontWidthMm + sideMarginMm;
-                double totalHeightMm = bottomTitleBlockClearanceMm + frontHeightMm + topMarginMm;
+                double topHeightMm = part.BarThicknessMm * scale;
+                double sideWidthMm = part.BarThicknessMm * scale;
+                double totalWidthMm = leftMarginMm + frontWidthMm + projectedViewGapMm + sideWidthMm + sideMarginMm;
+                double totalHeightMm = bottomTitleBlockClearanceMm + frontHeightMm + projectedViewGapMm + topHeightMm + topMarginMm;
 
                 if (totalWidthMm > sheet.WidthMm || totalHeightMm > sheet.HeightMm)
                     continue;
@@ -102,8 +109,24 @@ internal static class DrawingMethods
                 sheetWidthMm = sheet.WidthMm;
                 sheetHeightMm = sheet.HeightMm;
                 scaleDenominator = candidateScaleDenominator;
-                frontXmm = leftMarginMm + (frontWidthMm / 2.0);
-                frontYmm = sheet.HeightMm - topMarginMm - (frontHeightMm / 2.0);
+
+                if (part.DrawingUseFirstAngleProjection)
+                {
+                    frontXmm = leftMarginMm + projectedViewGapMm + sideWidthMm + (frontWidthMm / 2.0);
+                    sideXmm = leftMarginMm + (sideWidthMm / 2.0);
+                    frontYmm = sheet.HeightMm - topMarginMm - (frontHeightMm / 2.0);
+                    topYmm = frontYmm - (frontHeightMm / 2.0) - projectedViewGapMm - (topHeightMm / 2.0);
+                }
+                else
+                {
+                    frontXmm = leftMarginMm + (frontWidthMm / 2.0);
+                    sideXmm = frontXmm + (frontWidthMm / 2.0) + projectedViewGapMm + (sideWidthMm / 2.0);
+                    topYmm = sheet.HeightMm - topMarginMm - (topHeightMm / 2.0);
+                    frontYmm = topYmm - (topHeightMm / 2.0) - projectedViewGapMm - (frontHeightMm / 2.0);
+                }
+
+                topXmm = frontXmm;
+                sideYmm = frontYmm;
                 layoutFound = true;
                 break;
             }
@@ -113,7 +136,7 @@ internal static class DrawingMethods
         }
 
         if (!layoutFound)
-            throw new InvalidOperationException("Could not find a drawing sheet size and scale that fits the Torsion Bar front view.");
+            throw new InvalidOperationException("Could not find a drawing sheet size and scale that fits the Torsion Bar front, top, and side views.");
 
         string defaultDrawingTemplate = string.Empty;
         try
@@ -269,8 +292,8 @@ internal static class DrawingMethods
                 scaleDenominator,
                 part.DrawingUseFirstAngleProjection,
                 sheetFormatPath,
-                Mm(sheetWidthMm),
-                Mm(sheetHeightMm),
+                0,
+                0,
                 string.Empty,
                 false,
                 0,
@@ -288,6 +311,7 @@ internal static class DrawingMethods
 
             drawingDoc.ActivateSheet(sheetName);
             drawingDoc.EditSheet();
+            drawingModel.EditRebuild3();
 
             View frontView = drawingDoc.CreateDrawViewFromModelView3(partPath, "*Front", Mm(frontXmm), Mm(frontYmm), 0);
             if (frontView == null)
@@ -299,8 +323,30 @@ internal static class DrawingMethods
             frontView.Position = new double[] { Mm(frontXmm), Mm(frontYmm), 0.0 };
             frontView.PositionLocked = false;
 
+            drawingModel.ClearSelection2(true);
+            if (!drawingDoc.ActivateView(frontView.Name))
+                throw new InvalidOperationException("Could not activate the front torsion-bar view before creating projected views.");
+            if (!drawingModel.Extension.SelectByID2(frontView.Name, "DRAWINGVIEW", 0, 0, 0, false, 0, null, 0))
+                throw new InvalidOperationException("Could not select the front torsion-bar view before creating the projected top view.");
+
+            View topView = drawingDoc.CreateUnfoldedViewAt3(Mm(topXmm), Mm(topYmm), 0, false);
+            if (topView == null)
+                throw new InvalidOperationException("Could not create the projected top torsion-bar view.");
+
+            drawingModel.ClearSelection2(true);
+            if (!drawingDoc.ActivateView(frontView.Name))
+                throw new InvalidOperationException("Could not re-activate the front torsion-bar view before creating the side projection.");
+            if (!drawingModel.Extension.SelectByID2(frontView.Name, "DRAWINGVIEW", 0, 0, 0, false, 0, null, 0))
+                throw new InvalidOperationException("Could not select the front torsion-bar view before creating the projected side view.");
+
+            View sideView = drawingDoc.CreateUnfoldedViewAt3(Mm(sideXmm), Mm(sideYmm), 0, false);
+            if (sideView == null)
+                throw new InvalidOperationException("Could not create the projected side torsion-bar view.");
+
+            topView.PositionLocked = false;
+            sideView.PositionLocked = false;
+
             drawingModel.EditRebuild3();
-            drawingDoc.EditSheet();
             drawingDoc.ActivateSheet(sheetName);
             drawingModel.ClearSelection2(true);
             drawingModel.ViewZoomtofit2();
