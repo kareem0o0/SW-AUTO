@@ -569,7 +569,6 @@ public sealed class ShaftPart
 
 public sealed class SkeletonPart
 {
-    private const double MmToMeters = AutomationSupport.MmToMeters;
     private readonly SldWorks _swApp;
     private readonly PdmModule _pdm;
 
@@ -584,7 +583,8 @@ public sealed class SkeletonPart
     public bool SaveToPdm { get; set; }
     public string LocalFileName { get; set; } = "skeleton.SLDPRT";
 
-    public double SideOffsetMm { get; set; } = 500.0;
+    public double DESideOffset { get; set; } = 500.0;
+    public double NDESideOffset { get; set; } = 500.0;
     public double GroundOffsetMm { get; set; } = -250.0;
 
     private string GetRequiredOutputFolder() => AutomationSupport.RequireText(OutputFolder, nameof(OutputFolder), nameof(SkeletonPart));
@@ -592,7 +592,8 @@ public sealed class SkeletonPart
 
     public string Create()
     {
-        double sideOffset = SideOffsetMm;
+        double deSideOffset = DESideOffset;
+        double ndeSideOffset = NDESideOffset;
         double groundOffset = GroundOffsetMm;
         string outFolder = GetRequiredOutputFolder();
         bool closeAfterCreate = CloseAfterCreate;
@@ -606,16 +607,16 @@ public sealed class SkeletonPart
         swModel.Extension.SelectByID2("Ebene rechts", "PLANE", 0, 0, 0, false, 0, null, 0);
         Feature sideRight = swModel.FeatureManager.InsertRefPlane(
             (int)swRefPlaneReferenceConstraints_e.swRefPlaneReferenceConstraint_Distance,
-            sideOffset * MmToMeters,
+            ndeSideOffset,
             0, 0, 0, 0);
         swModel.ClearSelection2(true);
         sideRight.Name = "NDE_BEARING_CENTER";
 
-        // Side_Left (always opposite of Side_Right)
+        // Side_Left uses its own DE offset instead of mirroring the NDE side.
         swModel.ClearSelection2(true);
         swModel.Extension.SelectByID2("Ebene rechts", "PLANE", 0, 0, 0, false, 0, null, 0);
-        Feature sideLeft = swModel.FeatureManager.InsertRefPlane(264, sideOffset * MmToMeters,0, 0, 0, 0)
-        ;swModel.ClearSelection2(true);
+        Feature sideLeft = swModel.FeatureManager.InsertRefPlane(264, deSideOffset, 0, 0, 0, 0);
+        swModel.ClearSelection2(true);
         sideLeft.Name = "DE_BEARING_CENTER";
 
         // Ground_Plane (signed value as provided)
@@ -623,25 +624,24 @@ public sealed class SkeletonPart
         swModel.Extension.SelectByID2("Ebene oben", "PLANE", 0, 0, 0, false, 0, null, 0);
         if (groundOffset > 0)
         {
-        Feature groundPlane = swModel.FeatureManager.InsertRefPlane(
-            8,
-            groundOffset * MmToMeters,
-            0, 0, 0, 0);
-        swModel.ClearSelection2(true);
-        groundPlane.Name = "Ground_Plane";
+            Feature groundPlane = swModel.FeatureManager.InsertRefPlane(
+                8,
+                groundOffset,
+                0, 0, 0, 0);
+            swModel.ClearSelection2(true);
+            groundPlane.Name = "Ground_Plane";
         }
         else
         {
             // For negative offsets, flip the direction by selecting the opposite plane and using a positive distance.
-            double value = -1 *groundOffset * MmToMeters;
+            double value = -groundOffset;
             Feature groundPlane = swModel.FeatureManager.InsertRefPlane(
                 264,
                 value,
                 0, 0, 0, 0);
             swModel.ClearSelection2(true);
             groundPlane.Name = "Ground_Plane";
-        }   
-        
+        }
 
         string savedPath;
         if (saveToPdm)

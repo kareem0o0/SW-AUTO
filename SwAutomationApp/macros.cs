@@ -13,7 +13,8 @@ public static class Project1
 
         SkeletonPart skeleton = new SkeletonPart(swApp, pdm);
         skeleton.OutputFolder = outFolder;
-        skeleton.SideOffsetMm = 500.0;
+        skeleton.DESideOffset = 500.0;
+        skeleton.NDESideOffset = 500.0;
         skeleton.GroundOffsetMm = -250.0;
         skeleton.CloseAfterCreate = true;
 
@@ -64,7 +65,8 @@ public static class Project1
 
         SkeletonPart skeleton = new SkeletonPart(swApp, pdm);
         skeleton.OutputFolder = outFolder;
-        skeleton.SideOffsetMm = 2000.0;
+        skeleton.DESideOffset = 2000.0;
+        skeleton.NDESideOffset = 2000.0;
         skeleton.GroundOffsetMm = -500.0;
         skeleton.CloseAfterCreate = true;
 
@@ -119,7 +121,8 @@ public static class Project1
         skeleton.SaveToPdm = false;
         skeleton.CloseAfterCreate = true;
         skeleton.LocalFileName = "skeleton.SLDPRT";
-        skeleton.SideOffsetMm = 2000.0;
+        skeleton.DESideOffset = 2000.0;
+        skeleton.NDESideOffset = 2000.0;
         skeleton.GroundOffsetMm = -500.0;
 
         // Main stator lamination used as the thick core pack.
