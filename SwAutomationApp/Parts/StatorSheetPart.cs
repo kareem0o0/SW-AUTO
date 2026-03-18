@@ -75,6 +75,7 @@ public sealed class StatorSheetPart
         string outFolder = GetRequiredOutputFolder();
         bool closeAfterCreate = CloseAfterCreate;
         bool saveToPdm = SaveToPdm;
+        bool shouldCloseAfterCreate = closeAfterCreate || saveToPdm;
 
         // Main dimensions (m) - change these only.
         double outerDiameter = OuterDiameter;
@@ -350,7 +351,7 @@ public sealed class StatorSheetPart
             string savedPath;
             if (saveToPdm)
             {
-                savedPath = _pdm.SaveAsPdm(swModel, outFolder, PdmDataCard);
+                savedPath = _pdm.SaveAsPdm(swModel);
                 Console.WriteLine($"Part saved to PDM: {savedPath}");
             }
             else
@@ -360,11 +361,16 @@ public sealed class StatorSheetPart
                 Console.WriteLine($"Part saved locally: {savedPath}");
             }
 
-            if (closeAfterCreate)
+            if (shouldCloseAfterCreate)
             {
                 // Use GetTitle() to ensure we close the specific document we just saved
                 _swApp.CloseDoc(swModel.GetTitle());
                 Console.WriteLine("Part closed after creating.");
+            }
+
+            if (saveToPdm)
+            {
+                _pdm.UpdateBirrDataCard(savedPath, PdmDataCard.ToDictionary());
             }
 
             Console.WriteLine("Done!");

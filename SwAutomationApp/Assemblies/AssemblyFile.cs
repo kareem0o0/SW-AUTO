@@ -29,6 +29,7 @@ public class AssemblyFile
     private ModelDoc2 _model = null;
     private AssemblyDoc _assembly = null;
     private string _folder = string.Empty;
+    private string _fullPath = string.Empty;
     private int _insertIndex = 0;
     private Component2 _lastInsertedComponent = null;
 
@@ -59,15 +60,16 @@ public class AssemblyFile
     /// </summary>
     public string Create()
     {
-        return CreateDocument(CloseAfterCreate);
+        return CreateDocument();
     }
 
-    private string CreateDocument(bool closeAfterCreate)
+    private string CreateDocument()
     {
         // Read and validate the current object state first.
         string outFolder = GetRequiredOutputFolder();
         string fileName = GetRequiredFileName();
         bool saveToPdm = SaveToPdm;
+        bool closeAfterCreate = CloseAfterCreate;
 
         Directory.CreateDirectory(outFolder);
 
@@ -75,23 +77,22 @@ public class AssemblyFile
         // then create a new empty assembly document from it.
         string template = _swApp.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplateAssembly);
         ModelDoc2 model = (ModelDoc2)_swApp.NewDocument(template, 0, 0, 0);
-        string fullPath;
+        string fullPath = string.Empty;
 
-        // Save either to PDM or to a normal local file path.
-        if (saveToPdm)
-        {
-            fullPath = _pdm.SaveAsPdm(model, outFolder, PdmDataCard);
-        }
-        else
+        // For local workflows we create the disk file immediately.
+        // For PDM workflows we keep the assembly open in memory and only save it at the real end,
+        // after the full machine has been built.
+        if (!saveToPdm)
         {
             fullPath = Path.Combine(outFolder, fileName);
             model.SaveAs3(fullPath, 0, 1);
+            Console.WriteLine($"Assembly saved to: {fullPath}");
         }
 
-        Console.WriteLine($"Assembly saved to: {fullPath}");
         _insertIndex = 0;
+        _fullPath = fullPath;
 
-        if (closeAfterCreate)
+        if (!saveToPdm && closeAfterCreate)
         {
             // Some flows only need the file to exist on disk.
             // In that case we close the assembly immediately and return the file name.
@@ -99,34 +100,97 @@ public class AssemblyFile
             _model = null;
             _assembly = null;
             _folder = string.Empty;
+            _fullPath = string.Empty;
             _lastInsertedComponent = null;
             Console.WriteLine("Assembly closed after creating.");
             return Path.GetFileName(fullPath);
         }
 
         // Keep the assembly open when later insert/mate operations are expected.
+        // This is always the case for PDM assembly builds because the final save should only happen
+        // after all components have been inserted and mated.
         _model = model;
         _assembly = model as AssemblyDoc;
-        _folder = Path.GetDirectoryName(fullPath) ?? string.Empty;
+        if (saveToPdm)
+        {
+            _folder = _pdm.GetDefaultPdmFolderPath();
+        }
+        else
+        {
+            _folder = Path.GetDirectoryName(fullPath) ?? string.Empty;
+        }
 
         int activateErrors = 0;
         _swApp.ActivateDoc3(_model.GetTitle(), false, (int)swRebuildOnActivation_e.swDontRebuildActiveDoc, ref activateErrors);
+        if (saveToPdm)
+        {
+            Console.WriteLine("Assembly remains open for further operations. Final PDM save will happen when the assembly is closed.");
+            return fileName;
+        }
+
         Console.WriteLine("Assembly remains open for further operations.");
         return Path.GetFileName(fullPath);
     }
 
     /// <summary>
-    /// Closes the currently open assembly document and clears the cached state.
+    /// Saves the currently open assembly back into its existing file path without prompting.
     /// </summary>
+    public void Save()
+    {
+        if (_model == null)
+            return;
+
+        // PDM assemblies do their real save at the final Close() step.
+        // Until then there is no target file path yet, so Save() simply does nothing.
+        if (SaveToPdm)
+            return;
+
+        int saveErrors = 0;
+        int saveWarnings = 0;
+
+        _model.EditRebuild3();
+        _model.Save3((int)swSaveAsOptions_e.swSaveAsOptions_Silent, ref saveErrors, ref saveWarnings);
+    }
+
+    /// <summary>
+     /// Closes the currently open assembly document and clears the cached state.
+     /// </summary>
     public void Close()
     {
         if (_model == null)
             return;
 
+        string savedAssemblyPath = _fullPath;
+        bool saveToPdm = SaveToPdm;
+        BirrDataCardValues pdmDataCard = PdmDataCard;
+
+        if (saveToPdm)
+        {
+            // For PDM we save the fully built assembly only once, right here at the end.
+            // This matches the simple part workflow:
+            // create geometry, save, close, then fill the data card.
+            _model.EditRebuild3();
+            savedAssemblyPath = _pdm.SaveAsPdm(_model);
+            _fullPath = savedAssemblyPath;
+            Console.WriteLine($"Assembly saved to PDM: {savedAssemblyPath}");
+        }
+        else if (!string.IsNullOrWhiteSpace(savedAssemblyPath))
+        {
+            Save();
+        }
+
         _swApp.CloseDoc(_model.GetTitle());
+        Console.WriteLine("Assembly closed after creating.");
+
+        if (saveToPdm && !string.IsNullOrWhiteSpace(savedAssemblyPath))
+        {
+            _pdm.UpdateBirrDataCard(savedAssemblyPath, pdmDataCard.ToDictionary());
+        }
+
         _model = null;
         _assembly = null;
         _folder = string.Empty;
+        _fullPath = string.Empty;
         _insertIndex = 0;
         _lastInsertedComponent = null;
     }

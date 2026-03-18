@@ -83,7 +83,16 @@ namespace SwAutomation.Pdm
         private IEdmVault5 _vault;
         private const string VaultRoot = @"C:\Users\kareem.salah\PDM\Birr Machines PDM";
         private const string VaultName = "Birr Machines PDM";
-        private const string DefaultPdmSubFolder = "60_Tests";
+        private const string DefaultPdmSubFolder = @"60_Tests\665_Test_Kareem";
+
+        /// <summary>
+        /// Returns the actual folder on disk used for the default PDM save location.
+        /// Assembly code uses this to resolve relative file names returned by the part creators.
+        /// </summary>
+        public string GetDefaultPdmFolderPath()
+        {
+            return Path.Combine(VaultRoot, DefaultPdmSubFolder);
+        }
 
         /// <summary>
         /// Makes sure the code is attached to an already logged-in PDM vault session.
@@ -118,7 +127,7 @@ namespace SwAutomation.Pdm
         /// <summary>
         /// Copies an already existing local file into the vault and assigns a PDM serial number.
         /// </summary>
-        public void AddExistingFileToPdm(string localFilePath, string subFolder = "60_Tests")
+        public void AddExistingFileToPdm(string localFilePath)
         {
             EnsureLoggedIn();
 
@@ -151,9 +160,10 @@ namespace SwAutomation.Pdm
         /// <summary>
         /// Saves a live SolidWorks model directly into the PDM vault.
         ///
-        /// This method also updates the vault data card when a BirrDataCardValues object is supplied.
+        /// This method only saves the file into the vault and returns its full path.
+        /// Data-card writing is handled later, after the SolidWorks document is closed.
         /// </summary>
-        public string SaveAsPdm(ModelDoc2 swModel, string subFolder = "60_Tests", BirrDataCardValues dataCardValues = null)
+        public string SaveAsPdm(ModelDoc2 swModel)
         {
             EnsureLoggedIn();
 
@@ -193,10 +203,8 @@ namespace SwAutomation.Pdm
 
             folder.AddFile(0, fullPath, string.Empty, 1);
 
-            // Do not update the data card here.
-            // At this point SolidWorks still has the file open, and PDM can reject variable writes
-            // because the file is locked by another application.
-            // For now this method only saves and vaults the file itself.
+            // The file is still open in SolidWorks here, so card writing is not attempted in this step.
+            // SaveAsPdm currently only saves and vaults the file itself.
 
             Console.WriteLine($"Saved and Vaulted: {Path.GetFileName(fullPath)}");
             return fullPath;

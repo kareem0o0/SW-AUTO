@@ -78,6 +78,7 @@ public sealed class StatorPressringNdePart
         string outFolder = GetRequiredOutputFolder();
         bool closeAfterCreate = CloseAfterCreate;
         bool saveToPdm = SaveToPdm;
+        bool shouldCloseAfterCreate = closeAfterCreate || saveToPdm;
 
         bool SelectSketchByIndex(ModelDoc2 model, int index)
         {
@@ -845,7 +846,7 @@ public sealed class StatorPressringNdePart
             string savedPath;
             if (saveToPdm)
             {
-                savedPath = _pdm.SaveAsPdm(swModel, outFolder, PdmDataCard);
+                savedPath = _pdm.SaveAsPdm(swModel);
                 Console.WriteLine($"Part saved to PDM: {savedPath}");
             }
             else
@@ -855,10 +856,15 @@ public sealed class StatorPressringNdePart
                 Console.WriteLine($"Part saved locally: {savedPath}");
             }
 
-            if (closeAfterCreate)
+            if (shouldCloseAfterCreate)
             {
                 _swApp.CloseDoc(swModel.GetTitle());
                 Console.WriteLine("Part closed after creating.");
+            }
+
+            if (saveToPdm)
+            {
+                _pdm.UpdateBirrDataCard(savedPath, PdmDataCard.ToDictionary());
             }
 
             Console.WriteLine("Done!");

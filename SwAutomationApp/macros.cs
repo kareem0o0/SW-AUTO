@@ -20,7 +20,7 @@ public static class Project1
     /// Very small sample flow:
     /// create a few assembly documents and insert them into a machine assembly.
     /// </summary>
-    public static bool savetopdm = true;
+    public static bool savetopdm = false;
     public static void Run(string outFolder, SldWorks swApp, PdmModule pdm)
     {
         SkeletonPart skeleton = new SkeletonPart(swApp, pdm);
@@ -147,7 +147,7 @@ public static class Project1
         skeleton.PdmDataCard.ReplacementFor = "11";
         skeleton.PdmDataCard.DataCheck = "X";
 
-        // Main stator lamination used as the thick core pack.
+        // Main stator sheet
         StatorSheetPart statorSheet = new StatorSheetPart(swApp, pdm);
         statorSheet.OutputFolder = outFolder;
         statorSheet.SaveToPdm = savetopdm;
@@ -166,7 +166,7 @@ public static class Project1
         statorSheet.SlotPatternCount = 60;
         statorSheet.MaterialName = "AISI 1020";
 
-        // Distance sheets add the repeated spacer/boss geometry between stator packs.
+        // Distance sheets 
         StatorDistanceSheetPart statorDistanceSheet = new StatorDistanceSheetPart(swApp, pdm);
         statorDistanceSheet.OutputFolder = outFolder;
         statorDistanceSheet.SaveToPdm = savetopdm;
@@ -192,7 +192,7 @@ public static class Project1
         statorDistanceSheet.SlotPatternCount = 60;
         statorDistanceSheet.MaterialName = "AISI 1020";
 
-        // End sheets cap the repeated lamination stack at each side.
+        // End sheets 
         StatorEndSheetPart statorEndSheet = new StatorEndSheetPart(swApp, pdm);
         statorEndSheet.OutputFolder = outFolder;
         statorEndSheet.SaveToPdm = savetopdm;
@@ -207,7 +207,7 @@ public static class Project1
         statorEndSheet.SlotPatternCount = 60;
         statorEndSheet.MaterialName = "AISI 1020";
 
-        // Torsion bars are created once and then patterned around the finished stack.
+        // Torsion bars 
         TorsionBarPart torsionBar = new TorsionBarPart(swApp, pdm);
         torsionBar.OutputFolder = outFolder;
         torsionBar.SaveToPdm = savetopdm;
@@ -230,7 +230,7 @@ public static class Project1
         torsionBar.P0002ConfigName = "P0002";
         torsionBar.MaterialName = "AISI 1020";
 
-        // Press plates clamp the stack and also carry the assembly placement angle.
+        // Press plates 
         PressPlatePart pressPlate = new PressPlatePart(swApp, pdm);
         pressPlate.OutputFolder = outFolder;
         pressPlate.SaveToPdm = savetopdm;
@@ -247,7 +247,7 @@ public static class Project1
         pressPlate.AssemblyAngleDeg = 3.0;
         pressPlate.MaterialName = "AISI 1020";
 
-        // The NDE press ring is the first and last hardware item in the axial stack.
+        // The NDE press ring 
         StatorPressringNdePart pressRingNde = new StatorPressringNdePart(swApp, pdm);
         pressRingNde.OutputFolder = outFolder;
         pressRingNde.SaveToPdm = savetopdm;
@@ -383,6 +383,21 @@ public static class Project1
         machine.MateCoincident(insertedSkeleton, "Ebene oben", insertedTorsionBar, "Ebene vorne", torsionBarSlotRadius);
         machine.MateCoincident(insertedSkeleton, "Ebene rechts", insertedTorsionBar, "Ebene rechts", stackOffset / 2.0);
         machine.CircularPattern(insertedSkeleton, "X-Achse", torsionBarPatternCount, 2 * Math.PI, insertedTorsionBar);
+
+        // Finalize the assembly only after the full build is done.
+        // Local workflow:
+        // - CloseAfterCreate = true -> save and close
+        // - CloseAfterCreate = false -> save and leave open
+        // PDM workflow:
+        // - always close here so the file can be saved to PDM and its card can be filled
+        if (machine.SaveToPdm || machine.CloseAfterCreate)
+        {
+            machine.Close();
+        }
+        else
+        {
+            machine.Save();
+        }
 
         Console.WriteLine($"Macro completed. Machine assembly: {machinePath}");
     }

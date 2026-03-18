@@ -68,6 +68,7 @@ public sealed class StatorEndSheetPart
         string outFolder = GetRequiredOutputFolder();
         bool closeAfterCreate = CloseAfterCreate;
         bool saveToPdm = SaveToPdm;
+        bool shouldCloseAfterCreate = closeAfterCreate || saveToPdm;
         bool SelectSketchByIndex(ModelDoc2 model, int index)
         {
             return model.Extension.SelectByID2($"Skizze{index}", "SKETCH", 0, 0, 0, false, 0, null, 0)
@@ -315,7 +316,7 @@ public sealed class StatorEndSheetPart
             string savedPath;
             if (saveToPdm)
             {
-                savedPath = _pdm.SaveAsPdm(swModel, outFolder, PdmDataCard);
+                savedPath = _pdm.SaveAsPdm(swModel);
                 Console.WriteLine($"Part saved to PDM: {savedPath}");
             }
             else
@@ -325,10 +326,15 @@ public sealed class StatorEndSheetPart
                 Console.WriteLine($"Part saved locally: {savedPath}");
             }
 
-            if (closeAfterCreate)
+            if (shouldCloseAfterCreate)
             {
                 _swApp.CloseDoc(swModel.GetTitle());
                 Console.WriteLine("Part closed after creating.");
+            }
+
+            if (saveToPdm)
+            {
+                _pdm.UpdateBirrDataCard(savedPath, PdmDataCard.ToDictionary());
             }
 
             Console.WriteLine("Done!");

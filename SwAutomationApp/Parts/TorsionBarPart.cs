@@ -105,6 +105,7 @@ public sealed class TorsionBarPart
         string outFolder = GetRequiredOutputFolder();
         bool closeAfterCreate = CloseAfterCreate;
         bool saveToPdm = SaveToPdm;
+        bool shouldCloseAfterCreate = closeAfterCreate || saveToPdm;
 
         // SolidWorks can name sketches in German or English depending on the installation.
         // This helper lets the rest of the method ask for "the second sketch" without caring
@@ -393,7 +394,7 @@ public sealed class TorsionBarPart
             string savedPath;
             if (saveToPdm)
             {
-                savedPath = _pdm.SaveAsPdm(swModel, outFolder, PdmDataCard);
+                savedPath = _pdm.SaveAsPdm(swModel);
                 Console.WriteLine($"Part saved to PDM: {savedPath}");
             }
             else
@@ -403,10 +404,15 @@ public sealed class TorsionBarPart
                 Console.WriteLine($"Part saved locally: {savedPath}");
             }
 
-            if (closeAfterCreate)
+            if (shouldCloseAfterCreate)
             {
                 _swApp.CloseDoc(swModel.GetTitle());
                 Console.WriteLine("Part closed after creating.");
+            }
+
+            if (saveToPdm)
+            {
+                _pdm.UpdateBirrDataCard(savedPath, PdmDataCard.ToDictionary());
             }
 
             Console.WriteLine("Done!");

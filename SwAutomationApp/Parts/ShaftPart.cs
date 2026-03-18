@@ -76,6 +76,7 @@ public sealed class ShaftPart
         string outFolder = GetRequiredOutputFolder();
         bool closeAfterCreate = CloseAfterCreate;
         bool saveToPdm = SaveToPdm;
+        bool shouldCloseAfterCreate = closeAfterCreate || saveToPdm;
         string materialName = MaterialName;
 
         // Editable section radii in meters.
@@ -185,7 +186,7 @@ public sealed class ShaftPart
         string savedPath;
         if (saveToPdm)
         {
-            savedPath = _pdm.SaveAsPdm(swModel, outFolder, PdmDataCard);
+            savedPath = _pdm.SaveAsPdm(swModel);
             Console.WriteLine($"Shaft saved to PDM: {savedPath}");
         }
         else
@@ -195,10 +196,15 @@ public sealed class ShaftPart
             Console.WriteLine($"Shaft saved locally: {savedPath}");
         }
 
-        if (closeAfterCreate)
+        if (shouldCloseAfterCreate)
         {
             _swApp.CloseDoc(swModel.GetTitle());
             Console.WriteLine("Part closed after creating.");
+        }
+
+        if (saveToPdm)
+        {
+            _pdm.UpdateBirrDataCard(savedPath, PdmDataCard.ToDictionary());
         }
 
         return Path.GetFileName(savedPath);

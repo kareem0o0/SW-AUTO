@@ -338,11 +338,12 @@ internal static class DrawingMethods
         drawingModel.ClearSelection2(true);
         drawingModel.ViewZoomtofit2();
 
+        bool shouldCloseAfterCreate = part.DrawingCloseAfterCreate || part.DrawingSaveToPdm;
         string savedPath;
         if (part.DrawingSaveToPdm)
         {
             // Drawings can be saved to PDM separately from the part file.
-            savedPath = pdm.SaveAsPdm(drawingModel, outFolder, part.DrawingPdmDataCard);
+            savedPath = pdm.SaveAsPdm(drawingModel);
             Console.WriteLine($"Drawing saved to PDM: {savedPath}");
         }
         else
@@ -352,10 +353,15 @@ internal static class DrawingMethods
             Console.WriteLine($"Drawing saved locally: {savedPath}");
         }
 
-        if (part.DrawingCloseAfterCreate)
+        if (shouldCloseAfterCreate)
         {
             swApp.CloseDoc(drawingModel.GetTitle());
             Console.WriteLine("Drawing closed after creating.");
+        }
+
+        if (part.DrawingSaveToPdm)
+        {
+            pdm.UpdateBirrDataCard(savedPath, part.DrawingPdmDataCard.ToDictionary());
         }
 
         return Path.GetFileName(savedPath);

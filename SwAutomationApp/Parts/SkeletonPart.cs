@@ -57,6 +57,7 @@ public sealed class SkeletonPart
         string outFolder = GetRequiredOutputFolder();
         bool closeAfterCreate = CloseAfterCreate;
         bool saveToPdm = SaveToPdm;
+        bool shouldCloseAfterCreate = closeAfterCreate || saveToPdm;
 
         Directory.CreateDirectory(outFolder);
 
@@ -111,7 +112,7 @@ public sealed class SkeletonPart
         string savedPath;
         if (saveToPdm)
         {
-            savedPath = _pdm.SaveAsPdm(swModel, outFolder, PdmDataCard);
+            savedPath = _pdm.SaveAsPdm(swModel);
             Console.WriteLine($"Reference-plane part vaulted at: {savedPath}");
         }
         else
@@ -121,11 +122,16 @@ public sealed class SkeletonPart
             Console.WriteLine($"Reference-plane part saved locally at: {savedPath}");
         }
 
-        if (closeAfterCreate)
+        if (shouldCloseAfterCreate)
         {
             // Use GetTitle so the correct open document is closed.
             _swApp.CloseDoc(swModel.GetTitle());
             Console.WriteLine("Part closed after creating.");
+        }
+
+        if (saveToPdm)
+        {
+            _pdm.UpdateBirrDataCard(savedPath, PdmDataCard.ToDictionary());
         }
 
         return Path.GetFileName(savedPath);
