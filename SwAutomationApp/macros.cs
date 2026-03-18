@@ -20,7 +20,7 @@ public static class Project1
     /// Very small sample flow:
     /// create a few assembly documents and insert them into a machine assembly.
     /// </summary>
-    public static bool savetopdm = false;
+    public static bool savetopdm = true;
     public static void Run(string outFolder, SldWorks swApp, PdmModule pdm)
     {
         SkeletonPart skeleton = new SkeletonPart(swApp, pdm);

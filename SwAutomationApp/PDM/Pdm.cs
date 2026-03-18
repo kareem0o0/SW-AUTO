@@ -82,21 +82,37 @@ namespace SwAutomation.Pdm
     {
         private IEdmVault5 _vault;
         private const string VaultRoot = @"C:\Users\kareem.salah\PDM\Birr Machines PDM";
+        private const string VaultName = "Birr Machines PDM";
+        private const string DefaultPdmSubFolder = "60_Tests";
 
         /// <summary>
-        /// Opens the PDM vault session.
+        /// Makes sure the code is attached to an already logged-in PDM vault session.
         ///
-        /// Any workflow that wants to save to PDM must call this before SaveAsPdm().
+        /// The user is expected to log into PDM manually before running the code.
+        /// This method only connects to that existing session.
+        /// </summary>
+        private void EnsureLoggedIn()
+        {
+            if (_vault == null || !_vault.IsLoggedIn)
+            {
+                Login();
+            }
+        }
+
+        /// <summary>
+        /// Connects to the vault using the user's already active PDM login session.
+        ///
+        /// No credentials are stored in code anymore.
         /// </summary>
         public void Login()
         {
             _vault = new EdmVault5();
-            _vault.Login("kareem.salah", "976431852@KEmo", "Birr Machines PDM");
+            _vault.LoginAuto(VaultName, 0);
 
             if (!_vault.IsLoggedIn)
-                throw new Exception("PDM Login failed.");
+                throw new Exception("You are not logged into PDM. Please log into the '" + VaultName + "' vault manually before running the code.");
 
-            Console.WriteLine("Logged into vault");
+            Console.WriteLine("Connected to the already logged-in PDM vault.");
         }
 
         /// <summary>
@@ -104,6 +120,8 @@ namespace SwAutomation.Pdm
         /// </summary>
         public void AddExistingFileToPdm(string localFilePath, string subFolder = "60_Tests")
         {
+            EnsureLoggedIn();
+
             // Ask the vault for the next available serial number.
             IEdmVault11 vault11 = (IEdmVault11)_vault;
             IEdmSerNoGen7 snGen = (IEdmSerNoGen7)vault11.CreateUtility(EdmUtility.EdmUtil_SerNoGen);
@@ -114,7 +132,9 @@ namespace SwAutomation.Pdm
             var snValueObj = snGen.AllocSerNoValue(snNames[0], 0, string.Empty, 0, 0, 0, 0);
             string snString = snValueObj.Value;
 
-            string targetFolderPath = Path.Combine(VaultRoot, subFolder);
+            // For PDM saves we always use the default vault target path.
+            // The caller's OutputFolder is only meant for normal local saving.
+            string targetFolderPath = Path.Combine(VaultRoot, DefaultPdmSubFolder);
             string destinationPath = Path.Combine(targetFolderPath, snString + Path.GetExtension(localFilePath));
 
             if (!Directory.Exists(targetFolderPath))
@@ -135,6 +155,8 @@ namespace SwAutomation.Pdm
         /// </summary>
         public string SaveAsPdm(ModelDoc2 swModel, string subFolder = "60_Tests", BirrDataCardValues dataCardValues = null)
         {
+            EnsureLoggedIn();
+
             // Generate the next serial number before saving.
             IEdmVault11 vault11 = (IEdmVault11)_vault;
             IEdmSerNoGen7 snGen = (IEdmSerNoGen7)vault11.CreateUtility(EdmUtility.EdmUtil_SerNoGen);
@@ -153,8 +175,9 @@ namespace SwAutomation.Pdm
             else if (type == (int)swDocumentTypes_e.swDocDRAWING)
                 extension = ".slddrw";
 
-            // Build the final vault file path.
-            string targetDir = Path.Combine(VaultRoot, subFolder);
+            // For PDM saves we always use the default vault target path.
+            // The caller's OutputFolder should only affect local saves.
+            string targetDir = Path.Combine(VaultRoot, DefaultPdmSubFolder);
             string fullPath = Path.Combine(targetDir, snString + extension);
 
             if (!Directory.Exists(targetDir))
@@ -170,11 +193,10 @@ namespace SwAutomation.Pdm
 
             folder.AddFile(0, fullPath, string.Empty, 1);
 
-            if (dataCardValues != null)
-            {
-                // Push the object's data-card values into the vault file.
-                UpdateBirrDataCard(fullPath, dataCardValues.ToDictionary(snString));
-            }
+            // Do not update the data card here.
+            // At this point SolidWorks still has the file open, and PDM can reject variable writes
+            // because the file is locked by another application.
+            // For now this method only saves and vaults the file itself.
 
             Console.WriteLine($"Saved and Vaulted: {Path.GetFileName(fullPath)}");
             return fullPath;
@@ -185,6 +207,8 @@ namespace SwAutomation.Pdm
         /// </summary>
         public void GetDataCardValues(string filePath)
         {
+            EnsureLoggedIn();
+
             string fullPath = Path.IsPathRooted(filePath)
                 ? filePath
                 : Path.Combine(VaultRoot, filePath);
@@ -228,6 +252,8 @@ namespace SwAutomation.Pdm
         /// </summary>
         public void UpdateBirrDataCard(string relativePath, Dictionary<string, string> values)
         {
+            EnsureLoggedIn();
+
             string fullPath = Path.IsPathRooted(relativePath)
                 ? relativePath
                 : Path.Combine(VaultRoot, relativePath);
