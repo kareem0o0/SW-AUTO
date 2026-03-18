@@ -49,9 +49,20 @@ public sealed class ShaftPart
     public double Length5 { get; set; } = 0.15;
     public string MaterialName { get; set; } = "AISI 1020";
 
-    private string GetRequiredOutputFolder() => OutputFolder;
-    private string GetRequiredLocalFileName() => LocalFileName;
-    private AutomationUiScope BeginAutomationUiSuppression() => new(_swApp);
+    private string GetRequiredOutputFolder()
+    {
+        return OutputFolder;
+    }
+
+    private string GetRequiredLocalFileName()
+    {
+        return LocalFileName;
+    }
+
+    private AutomationUiScope BeginAutomationUiSuppression()
+    {
+        return new AutomationUiScope(_swApp);
+    }
 
     /// <summary>
     /// Creates the shaft geometry and saves it.

@@ -45,7 +45,10 @@ public class AssemblyFile
     public string FileName { get; set; } = "Assembly.SLDASM";
     public BirrDataCardValues PdmDataCard { get; set; } = BirrDataCardValues.CreateDefault();
 
-    private string GetRequiredOutputFolder() => OutputFolder;
+    private string GetRequiredOutputFolder()
+    {
+        return OutputFolder;
+    }
     private string GetRequiredFileName()
     {
         return FileName;
@@ -54,7 +57,10 @@ public class AssemblyFile
     /// <summary>
     /// Public entry point used by macros and external callers.
     /// </summary>
-    public string Create() => CreateDocument(CloseAfterCreate);
+    public string Create()
+    {
+        return CreateDocument(CloseAfterCreate);
+    }
 
     private string CreateDocument(bool closeAfterCreate)
     {

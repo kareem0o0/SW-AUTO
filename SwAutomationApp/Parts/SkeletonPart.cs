@@ -36,8 +36,15 @@ public sealed class SkeletonPart
     public double SideOffset { get; set; } = 0.5;
     public double GroundOffset { get; set; } = -0.25;
 
-    private string GetRequiredOutputFolder() => OutputFolder;
-    private string GetRequiredLocalFileName() => LocalFileName;
+    private string GetRequiredOutputFolder()
+    {
+        return OutputFolder;
+    }
+
+    private string GetRequiredLocalFileName()
+    {
+        return LocalFileName;
+    }
 
     /// <summary>
     /// Creates the reference-plane part and saves it.

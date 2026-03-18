@@ -70,9 +70,20 @@ public sealed class TorsionBarPart
     public double DrawingBottomTitleBlockClearance { get; set; } = 0.085;
     public string DrawingReferencedConfiguration { get; set; } = "P0002";
 
-    private string GetRequiredOutputFolder() => OutputFolder;
-    private string GetRequiredLocalFileName() => LocalFileName;
-    private AutomationUiScope BeginAutomationUiSuppression() => new(_swApp);
+    private string GetRequiredOutputFolder()
+    {
+        return OutputFolder;
+    }
+
+    private string GetRequiredLocalFileName()
+    {
+        return LocalFileName;
+    }
+
+    private AutomationUiScope BeginAutomationUiSuppression()
+    {
+        return new AutomationUiScope(_swApp);
+    }
 
     // Public creation choices:
     // CreatePart() makes only the 3D model.

@@ -48,9 +48,20 @@ public sealed class PressPlatePart
     public double AssemblyAngleDeg { get; set; } = 3.0;
     public string MaterialName { get; set; } = "AISI 1020";
 
-    private string GetRequiredOutputFolder() => OutputFolder;
-    private string GetRequiredLocalFileName() => LocalFileName;
-    private AutomationUiScope BeginAutomationUiSuppression() => new(_swApp);
+    private string GetRequiredOutputFolder()
+    {
+        return OutputFolder;
+    }
+
+    private string GetRequiredLocalFileName()
+    {
+        return LocalFileName;
+    }
+
+    private AutomationUiScope BeginAutomationUiSuppression()
+    {
+        return new AutomationUiScope(_swApp);
+    }
 
     /// <summary>
     /// Creates the press plate model and saves it.
@@ -176,8 +187,15 @@ public sealed class PressPlatePart
                 || topLine == null || rightLine == null || bottomLine == null || leftLine == null)
                 throw new Exception("Could not create press-plate body rectangle");
 
-            SketchPoint LineStart(SketchLine line) => line.GetStartPoint2();
-            SketchPoint LineEnd(SketchLine line) => line.GetEndPoint2();
+            SketchPoint LineStart(SketchLine line)
+            {
+                return line.GetStartPoint2();
+            }
+
+            SketchPoint LineEnd(SketchLine line)
+            {
+                return line.GetEndPoint2();
+            }
 
             // First connect the four loose lines into one closed rectangular profile.
             // SolidWorks needs these endpoint relations before it can treat the shape as a valid
