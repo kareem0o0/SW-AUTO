@@ -70,7 +70,7 @@ public static class Project1
     }
 
     /// <summary>
-    /// Small test flow that creates skeleton, stator sheet, and shaft,
+    /// Small test flow that creates skeleton and stator sheet,
     /// then mates them inside one machine assembly.
     /// </summary>
     public static void Run2(string outFolder, SldWorks swApp, PdmModule pdm)
@@ -85,27 +85,20 @@ public static class Project1
         statorSheet.OutputFolder = outFolder;
         statorSheet.CloseAfterCreate = true;
 
-        ShaftPart shaft = new ShaftPart(swApp, pdm);
-        shaft.OutputFolder = outFolder;
-        shaft.CloseAfterCreate = true;
-
         AssemblyFile machine = new AssemblyFile(swApp, pdm);
         machine.FileName = "MachineAssembly.SLDASM";
         machine.OutputFolder = outFolder;
 
         string skeletonPath = skeleton.Create();
         string statorSheetPath = statorSheet.Create();
-        string shaftPath = shaft.Create();
         string machinePath = machine.Create();
 
         var insertedSkeleton = machine.Insert(skeletonPath);
         machine.MateToOrigin(insertedSkeleton);
         var insertedStatorSheet = machine.Insert(statorSheetPath);
-        var insertedShaft = machine.Insert(shaftPath);
         machine.MateCoincident(insertedSkeleton, "X-Achse", insertedStatorSheet, "Z-Achse");
         machine.MateCoincident(insertedSkeleton, "Ebene rechts", insertedStatorSheet, "Ebene vorne");
         machine.MateCoincident(insertedSkeleton, "Ebene vorne", insertedStatorSheet, "Ebene rechts");
-        machine.MateCoincident(insertedSkeleton, "X-Achse", insertedShaft, "Z-Achse");
 
         Console.WriteLine($"Macro completed. Machine assembly: {machinePath}");
     }
