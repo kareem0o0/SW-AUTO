@@ -121,11 +121,12 @@ public static class Project1
 
     public static void Run4(string outFolder, SldWorks swApp, PdmModule pdm)
     {
+        bool savetopdm = false;
         // These objects are the editable parameter surface for the machine build.
         // Skeleton planes and axes act as the assembly reference frame.
         SkeletonPart skeleton = new SkeletonPart(swApp, pdm);
         skeleton.OutputFolder = outFolder;
-        skeleton.SaveToPdm = false;
+        skeleton.SaveToPdm = savetopdm;
         skeleton.CloseAfterCreate = true;
         skeleton.LocalFileName = "skeleton.SLDPRT";
         skeleton.SideOffset = 2;
@@ -148,7 +149,7 @@ public static class Project1
         // Main stator lamination used as the thick core pack.
         StatorSheetPart statorSheet = new StatorSheetPart(swApp, pdm);
         statorSheet.OutputFolder = outFolder;
-        statorSheet.SaveToPdm = false;
+        statorSheet.SaveToPdm = savetopdm;
         statorSheet.CloseAfterCreate = true;
         statorSheet.LocalFileName = "StatorBleche.SLDPRT";
         statorSheet.OuterDiameter = 0.99;
@@ -167,7 +168,7 @@ public static class Project1
         // Distance sheets add the repeated spacer/boss geometry between stator packs.
         StatorDistanceSheetPart statorDistanceSheet = new StatorDistanceSheetPart(swApp, pdm);
         statorDistanceSheet.OutputFolder = outFolder;
-        statorDistanceSheet.SaveToPdm = false;
+        statorDistanceSheet.SaveToPdm = savetopdm;
         statorDistanceSheet.CloseAfterCreate = true;
         statorDistanceSheet.LocalFileName = "StatorDistanceBleche.SLDPRT";
         statorDistanceSheet.OuterDiameter = 0.99;
@@ -193,7 +194,7 @@ public static class Project1
         // End sheets cap the repeated lamination stack at each side.
         StatorEndSheetPart statorEndSheet = new StatorEndSheetPart(swApp, pdm);
         statorEndSheet.OutputFolder = outFolder;
-        statorEndSheet.SaveToPdm = false;
+        statorEndSheet.SaveToPdm = savetopdm;
         statorEndSheet.CloseAfterCreate = true;
         statorEndSheet.LocalFileName = "StatorEndBleche.SLDPRT";
         statorEndSheet.OuterDiameter = 0.99;
@@ -208,7 +209,7 @@ public static class Project1
         // Torsion bars are created once and then patterned around the finished stack.
         TorsionBarPart torsionBar = new TorsionBarPart(swApp, pdm);
         torsionBar.OutputFolder = outFolder;
-        torsionBar.SaveToPdm = false;
+        torsionBar.SaveToPdm = savetopdm;
         torsionBar.CloseAfterCreate = true;
         torsionBar.LocalFileName = "TorsionBar.SLDPRT";
         torsionBar.BarLength = 1.074;
@@ -231,7 +232,7 @@ public static class Project1
         // Press plates clamp the stack and also carry the assembly placement angle.
         PressPlatePart pressPlate = new PressPlatePart(swApp, pdm);
         pressPlate.OutputFolder = outFolder;
-        pressPlate.SaveToPdm = false;
+        pressPlate.SaveToPdm = savetopdm;
         pressPlate.CloseAfterCreate = true;
         pressPlate.LocalFileName = "PressPlate.SLDPRT";
         pressPlate.OuterDiameter = 0.99;
@@ -248,7 +249,7 @@ public static class Project1
         // The NDE press ring is the first and last hardware item in the axial stack.
         StatorPressringNdePart pressRingNde = new StatorPressringNdePart(swApp, pdm);
         pressRingNde.OutputFolder = outFolder;
-        pressRingNde.SaveToPdm = false;
+        pressRingNde.SaveToPdm = savetopdm;
         pressRingNde.CloseAfterCreate = true;
         pressRingNde.LocalFileName = "StatorPressringNDE.SLDPRT";
         pressRingNde.OuterDiameter = 1.1;
@@ -268,7 +269,7 @@ public static class Project1
         // This is the target assembly document that all generated parts are inserted into.
         AssemblyFile machine = new AssemblyFile(swApp, pdm);
         machine.OutputFolder = outFolder;
-        machine.SaveToPdm = false;
+        machine.SaveToPdm = savetopdm;
         machine.FileName = "MachineAssembly.SLDASM";
         machine.CloseAfterCreate = false;
         int repeatedDistanceEndSheetPacks = 5;
@@ -393,7 +394,7 @@ public static class Project1
         // 2. the 2D drawing parameters
         TorsionBarPart torsionBar = new TorsionBarPart(swApp, pdm);
         torsionBar.OutputFolder = outFolder;
-        torsionBar.SaveToPdm = false;
+        torsionBar.SaveToPdm = savetopdm;
         torsionBar.CloseAfterCreate = true;
         torsionBar.LocalFileName = "TorsionBar.SLDPRT";
         torsionBar.BarLength = 1.074;
@@ -417,7 +418,7 @@ public static class Project1
         // They live on the same part object so you can configure everything in one place,
         // but the actual drawing work is still implemented in drawing.cs.
         torsionBar.DrawingOutputFolder = outFolder;
-        torsionBar.DrawingSaveToPdm = false;
+        torsionBar.DrawingSaveToPdm = savetopdm;
         // false = leave the drawing open after Create(); true = close it after saving
         torsionBar.DrawingCloseAfterCreate = false;
         torsionBar.DrawingLocalFileName = "TorsionBar.SLDDRW";
