@@ -258,40 +258,34 @@ namespace SwAutomation.Pdm
                 }
             }
 
+            // Write the same card values to the generic "@" configuration and to every
+            // named configuration so the file stays consistent whichever config is active.
             foreach (string config in configsToUpdate)
             {
                 foreach (KeyValuePair<string, string> entry in values)
                 {
-                    try
+                    // Vault variable names do not always match our code property names perfectly.
+                    // Search the available variables first, then write the matched field.
+                    string actualVarName = null;
+                    IEdmPos5 pos = varMgr.GetFirstVariablePosition();
+                    while (!pos.IsNull)
                     {
-                        // Vault variable names do not always match our code property names perfectly.
-                        // So we search the vault variables and try to find the closest matching name.
-                        string actualVarName = null;
-                        IEdmPos5 pos = varMgr.GetFirstVariablePosition();
-                        while (!pos.IsNull)
+                        IEdmVariable5 variable = varMgr.GetNextVariable(pos);
+                        if (variable.Name.Equals(entry.Key, StringComparison.OrdinalIgnoreCase) ||
+                            variable.Name.StartsWith(entry.Key.Replace(":", string.Empty), StringComparison.OrdinalIgnoreCase))
                         {
-                            IEdmVariable5 variable = varMgr.GetNextVariable(pos);
-                            if (variable.Name.Equals(entry.Key, StringComparison.OrdinalIgnoreCase) ||
-                                variable.Name.StartsWith(entry.Key.Replace(":", string.Empty), StringComparison.OrdinalIgnoreCase))
-                            {
-                                actualVarName = variable.Name;
-                                break;
-                            }
+                            actualVarName = variable.Name;
+                            break;
                         }
+                    }
 
-                        if (!string.IsNullOrEmpty(actualVarName))
-                        {
-                            varEnum.SetVar(actualVarName, config, entry.Value ?? string.Empty, false);
-                        }
-                        else
-                        {
-                            Console.WriteLine($"SKIPPED: Variable matching '{entry.Key}' not found in Vault.");
-                        }
-                    }
-                    catch (Exception ex)
+                    if (string.IsNullOrEmpty(actualVarName))
                     {
-                        Console.WriteLine($"Error setting {entry.Key}: {ex.Message}");
+                        Console.WriteLine($"SKIPPED: Variable matching '{entry.Key}' not found in Vault.");
+                        continue;
                     }
+
+                    varEnum.SetVar(actualVarName, config, entry.Value ?? string.Empty, false);
                 }
             }
 

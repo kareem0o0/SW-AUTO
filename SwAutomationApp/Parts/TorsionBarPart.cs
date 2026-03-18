@@ -23,8 +23,8 @@ public sealed class TorsionBarPart
 
     public TorsionBarPart(SldWorks swApp, PdmModule pdm)
     {
-        _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
-        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
+        _swApp = swApp;
+        _pdm = pdm;
     }
 
     // File and save settings for the 3D part.
@@ -70,8 +70,8 @@ public sealed class TorsionBarPart
     public double DrawingBottomTitleBlockClearance { get; set; } = 0.085;
     public string DrawingReferencedConfiguration { get; set; } = "P0002";
 
-    private string GetRequiredOutputFolder() => AutomationSupport.RequireText(OutputFolder, nameof(OutputFolder), nameof(TorsionBarPart));
-    private string GetRequiredLocalFileName() => AutomationSupport.RequireText(LocalFileName, nameof(LocalFileName), nameof(TorsionBarPart));
+    private string GetRequiredOutputFolder() => OutputFolder;
+    private string GetRequiredLocalFileName() => LocalFileName;
     private AutomationUiScope BeginAutomationUiSuppression() => new(_swApp);
 
     // Public creation choices:
@@ -94,6 +94,10 @@ public sealed class TorsionBarPart
         string outFolder = GetRequiredOutputFolder();
         bool closeAfterCreate = CloseAfterCreate;
         bool saveToPdm = SaveToPdm;
+
+        // SolidWorks can name sketches in German or English depending on the installation.
+        // This helper lets the rest of the method ask for "the second sketch" without caring
+        // which language the UI used when the sketch was created.
         bool SelectSketchByIndex(ModelDoc2 model, int index)
         {
             return model.Extension.SelectByID2($"Skizze{index}", "SKETCH", 0, 0, 0, false, 0, null, 0)
@@ -119,7 +123,9 @@ public sealed class TorsionBarPart
         string p0002ConfigName = P0002ConfigName;
         string materialName = MaterialName;
 
-        // Derived dimensions
+        // Derived dimensions.
+        // The bar is modeled around the origin, so half sizes and centered offsets make the
+        // later sketching and hole placement steps much easier to read.
         double barLength = barLengthValue;
         double barHeight = barHeightValue;
         double barThickness = barThicknessValue;
@@ -134,7 +140,7 @@ public sealed class TorsionBarPart
         ModelDoc2 swModel = null;
         SketchManager swSketchManager = null;
 
-        try
+        // Build the torsion bar from the current property values, then save it.
         {
             Dimension swDim = null;
             DisplayDimension displayDim = null;
@@ -161,6 +167,7 @@ public sealed class TorsionBarPart
 
             swSketchManager = swModel.SketchManager;
 
+            // The material is applied early so the saved file already carries the correct metadata.
             PartDoc torsionBarPart = swModel as PartDoc;
             torsionBarPart.SetMaterialPropertyName2("", "", Name: materialName);
 
@@ -393,11 +400,6 @@ public sealed class TorsionBarPart
 
             Console.WriteLine("Done!");
             return Path.GetFileName(savedPath);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("Fatal error: " + ex);
-            return null;
         }
     }
 

@@ -23,8 +23,8 @@ public sealed class ShaftPart
 
     public ShaftPart(SldWorks swApp, PdmModule pdm)
     {
-        _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
-        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
+        _swApp = swApp;
+        _pdm = pdm;
     }
 
     // File and save settings.
@@ -49,8 +49,8 @@ public sealed class ShaftPart
     public double Length5 { get; set; } = 0.15;
     public string MaterialName { get; set; } = "AISI 1020";
 
-    private string GetRequiredOutputFolder() => AutomationSupport.RequireText(OutputFolder, nameof(OutputFolder), nameof(ShaftPart));
-    private string GetRequiredLocalFileName() => AutomationSupport.RequireText(LocalFileName, nameof(LocalFileName), nameof(ShaftPart));
+    private string GetRequiredOutputFolder() => OutputFolder;
+    private string GetRequiredLocalFileName() => LocalFileName;
     private AutomationUiScope BeginAutomationUiSuppression() => new(_swApp);
 
     /// <summary>
@@ -83,9 +83,6 @@ public sealed class ShaftPart
 
         double[] radii = { radius1, radius2, radius3, radius4, radius5 };
         double[] lengths = { length1, length2, length3, length4, length5 };
-
-        if (string.IsNullOrWhiteSpace(outFolder))
-            throw new ArgumentException("Output folder is required.", nameof(outFolder));
 
         Directory.CreateDirectory(outFolder);
 

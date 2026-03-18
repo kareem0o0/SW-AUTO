@@ -34,8 +34,8 @@ public class AssemblyFile
 
     public AssemblyFile(SldWorks swApp, PdmModule pdm)
     {
-        _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
-        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
+        _swApp = swApp;
+        _pdm = pdm;
     }
 
     // These properties define how the assembly document should be saved and managed.
@@ -45,10 +45,10 @@ public class AssemblyFile
     public string FileName { get; set; } = "Assembly.SLDASM";
     public BirrDataCardValues PdmDataCard { get; set; } = BirrDataCardValues.CreateDefault();
 
-    private string GetRequiredOutputFolder() => AutomationSupport.RequireText(OutputFolder, nameof(OutputFolder), nameof(AssemblyFile));
+    private string GetRequiredOutputFolder() => OutputFolder;
     private string GetRequiredFileName()
     {
-        return AutomationSupport.RequireText(FileName, nameof(FileName), nameof(AssemblyFile));
+        return FileName;
     }
 
     /// <summary>
@@ -234,7 +234,7 @@ public class AssemblyFile
         bool looksLikePlane = IsPlaneReference(referenceName);
         bool looksLikeAxis = IsAxisReference(referenceName);
 
-        // If the reference is not a plane or axis, we treat it as a named face and try to map
+        // If the reference is not a plane or axis, we treat it as a named face and map
         // that part face into the assembly context.
         if (comp != null && !looksLikePlane && !looksLikeAxis)
         {
@@ -509,6 +509,8 @@ public class AssemblyFile
     if (selectionMgr == null)
         throw new Exception("Could not access selection manager for linear component pattern");
 
+    // SolidWorks can be very sensitive to selection marks in component patterns.
+    // We sweep through the common working mark combinations until one is accepted.
     foreach (int directionMark in new[] { 2, 1, 4, 256 })
     {
         foreach (int componentMark in new[] { 1, 4, 256, 2 })
@@ -629,6 +631,8 @@ public class AssemblyFile
     if (selectionMgr == null)
         throw new Exception("Could not access selection manager for circular component pattern");
 
+    // Circular patterns use the same idea as the linear pattern above:
+    // cycle through the common selection-mark combinations until SolidWorks accepts one.
     foreach (int axisMark in new[] { 1, 2, 4, 256 })
     {
         foreach (int componentMark in new[] { 1, 4, 256, 2 })

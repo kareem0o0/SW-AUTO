@@ -29,20 +29,13 @@ internal static class DrawingMethods
     /// </summary>
     public static string CreateTorsionBarDrawing(TorsionBarPart part, SldWorks swApp, PdmModule pdm)
     {
-        if (part == null)
-            throw new InvalidOperationException("CreateTorsionBarDrawing requires a TorsionBarPart instance.");
-        if (swApp == null)
-            throw new ArgumentNullException(nameof(swApp));
-        if (pdm == null)
-            throw new ArgumentNullException(nameof(pdm));
-
         // The drawing may have its own output folder, but if it is blank we reuse the part folder.
         string outFolder = string.IsNullOrWhiteSpace(part.DrawingOutputFolder)
-            ? AutomationSupport.RequireText(part.OutputFolder, nameof(part.OutputFolder), nameof(TorsionBarPart))
+            ? part.OutputFolder
             : Path.GetFullPath(part.DrawingOutputFolder);
         Directory.CreateDirectory(outFolder);
 
-        // If a custom drawing file name was not given, derive it from the part file name.
+        // If a custom drawing file name was not given, reuse the part file name with a drawing extension.
         string drawingFileName = string.IsNullOrWhiteSpace(part.DrawingLocalFileName)
             ? Path.ChangeExtension(part.LocalFileName, ".SLDDRW")
             : part.DrawingLocalFileName;
@@ -80,6 +73,7 @@ internal static class DrawingMethods
             throw new InvalidOperationException("TorsionBarPart.DrawingLanguageCode must be either EN or DE.");
 
         // Candidate sheet sizes and their dimensions in meters.
+        // The code walks from small to large so it picks the smallest sheet that still fits.
         (string PaperCode, swDwgPaperSizes_e PaperSize, double Width, double Height)[] sheets =
         {
             ("A4", swDwgPaperSizes_e.swDwgPaperA4size, 0.21, 0.297),
@@ -96,8 +90,6 @@ internal static class DrawingMethods
 
         string paperCode = string.Empty;
         swDwgPaperSizes_e paperSize = swDwgPaperSizes_e.swDwgPaperA3size;
-        double sheetWidth = 0.0;
-        double sheetHeight = 0.0;
         double scaleNumerator = 1.0;
         double scaleDenominator = 1.0;
         double frontX = 0.0;
@@ -109,6 +101,7 @@ internal static class DrawingMethods
         bool layoutFound = false;
 
         // Try progressively larger sheets and a list of scale options until the three views fit.
+        // Once one combination works, the loop stops and uses that layout.
         foreach (var sheet in sheets)
         {
             foreach (double candidateScaleDenominator in scaleDenominators)
@@ -126,8 +119,6 @@ internal static class DrawingMethods
 
                 paperCode = sheet.PaperCode;
                 paperSize = sheet.PaperSize;
-                sheetWidth = sheet.Width;
-                sheetHeight = sheet.Height;
                 scaleDenominator = candidateScaleDenominator;
 
                 if (part.DrawingUseFirstAngleProjection)
@@ -158,16 +149,8 @@ internal static class DrawingMethods
         if (!layoutFound)
             throw new InvalidOperationException("Could not find a drawing sheet size and scale that fits the Torsion Bar front, top, and side views.");
 
-        // First try SolidWorks' configured default drawing template.
-        string defaultDrawingTemplate = string.Empty;
-        try
-        {
-            defaultDrawingTemplate = swApp.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplateDrawing) ?? string.Empty;
-        }
-        catch
-        {
-            defaultDrawingTemplate = string.Empty;
-        }
+        // Start with SolidWorks' default drawing template if one is configured.
+        string defaultDrawingTemplate = swApp.GetUserPreferenceStringValue((int)swUserPreferenceStringValue_e.swDefaultTemplateDrawing) ?? string.Empty;
 
         string drawingTemplatePath = string.Empty;
         if (!string.IsNullOrWhiteSpace(part.DrawingTemplatePathOverride))
@@ -184,15 +167,7 @@ internal static class DrawingMethods
         else
         {
             // Otherwise search the configured SolidWorks document-template folders.
-            string documentTemplateFolders = string.Empty;
-            try
-            {
-                documentTemplateFolders = swApp.GetUserPreferenceStringListValue((int)swUserPreferenceStringValue_e.swFileLocationsDocumentTemplates) ?? string.Empty;
-            }
-            catch
-            {
-                documentTemplateFolders = string.Empty;
-            }
+            string documentTemplateFolders = swApp.GetUserPreferenceStringListValue((int)swUserPreferenceStringValue_e.swFileLocationsDocumentTemplates) ?? string.Empty;
 
             char[] separators = { '|', ';', '\r', '\n' };
             foreach (string rawFolder in documentTemplateFolders.Split(separators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
@@ -223,31 +198,14 @@ internal static class DrawingMethods
         else
         {
             // Build a list of folders where the expected sheet format might exist.
+            // SolidWorks folders are checked first, then the Birr template folder set on the object.
             List<string> sheetFormatFolders = new();
             char[] separators = { '|', ';', '\r', '\n' };
 
             if (part.DrawingPreferSolidWorksTemplateLocations)
             {
-                string configuredSheetFormatFolders = string.Empty;
-                string configuredNewSheetFormatFolders = string.Empty;
-
-                try
-                {
-                    configuredSheetFormatFolders = swApp.GetUserPreferenceStringListValue((int)swUserPreferenceStringValue_e.swFileLocationsSheetFormat) ?? string.Empty;
-                }
-                catch
-                {
-                    configuredSheetFormatFolders = string.Empty;
-                }
-
-                try
-                {
-                    configuredNewSheetFormatFolders = swApp.GetUserPreferenceStringListValue((int)swUserPreferenceStringValue_e.swFileLocationsNewSheetFormat) ?? string.Empty;
-                }
-                catch
-                {
-                    configuredNewSheetFormatFolders = string.Empty;
-                }
+                string configuredSheetFormatFolders = swApp.GetUserPreferenceStringListValue((int)swUserPreferenceStringValue_e.swFileLocationsSheetFormat) ?? string.Empty;
+                string configuredNewSheetFormatFolders = swApp.GetUserPreferenceStringListValue((int)swUserPreferenceStringValue_e.swFileLocationsNewSheetFormat) ?? string.Empty;
 
                 foreach (string rawFolder in configuredSheetFormatFolders.Split(separators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 {
@@ -306,111 +264,101 @@ internal static class DrawingMethods
             throw new InvalidOperationException("Could not access the SolidWorks drawing document.");
         }
 
-        try
+        string sheetName = string.IsNullOrWhiteSpace(part.DrawingSheetName) ? "Sheet1" : part.DrawingSheetName;
+
+        // Apply the chosen sheet size, scale, projection method, and company sheet format.
+        bool sheetConfigured = drawingDoc.SetupSheet6(
+            sheetName,
+            (int)paperSize,
+            (int)swDwgTemplates_e.swDwgTemplateCustom,
+            scaleNumerator,
+            scaleDenominator,
+            part.DrawingUseFirstAngleProjection,
+            sheetFormatPath,
+            0,
+            0,
+            string.Empty,
+            false,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1);
+
+        if (!sheetConfigured)
+            throw new InvalidOperationException("Could not configure the drawing sheet.");
+
+        Console.WriteLine($"Drawing template: {drawingTemplatePath}");
+        Console.WriteLine($"Sheet format: {sheetFormatPath}");
+
+        // Activate the sheet before inserting views so every view lands on the expected sheet.
+        drawingDoc.ActivateSheet(sheetName);
+        drawingDoc.EditSheet();
+        drawingModel.EditRebuild3();
+
+        // Insert the main front view first because the projected views depend on it.
+        View frontView = drawingDoc.CreateDrawViewFromModelView3(partPath, "*Front", frontX, frontY, 0);
+        if (frontView == null)
+            throw new InvalidOperationException("Could not create the front torsion-bar view.");
+
+        if (!string.IsNullOrWhiteSpace(part.DrawingReferencedConfiguration))
+            frontView.ReferencedConfiguration = part.DrawingReferencedConfiguration;
+
+        frontView.Position = new double[] { frontX, frontY, 0.0 };
+        frontView.PositionLocked = false;
+
+        // SolidWorks creates projected views from the currently selected base view.
+        drawingModel.ClearSelection2(true);
+        if (!drawingDoc.ActivateView(frontView.Name))
+            throw new InvalidOperationException("Could not activate the front torsion-bar view before creating projected views.");
+        if (!drawingModel.Extension.SelectByID2(frontView.Name, "DRAWINGVIEW", 0, 0, 0, false, 0, null, 0))
+            throw new InvalidOperationException("Could not select the front torsion-bar view before creating the projected top view.");
+
+        View topView = drawingDoc.CreateUnfoldedViewAt3(topX, topY, 0, false);
+        if (topView == null)
+            throw new InvalidOperationException("Could not create the projected top torsion-bar view.");
+
+        drawingModel.ClearSelection2(true);
+        if (!drawingDoc.ActivateView(frontView.Name))
+            throw new InvalidOperationException("Could not re-activate the front torsion-bar view before creating the side projection.");
+        if (!drawingModel.Extension.SelectByID2(frontView.Name, "DRAWINGVIEW", 0, 0, 0, false, 0, null, 0))
+            throw new InvalidOperationException("Could not select the front torsion-bar view before creating the projected side view.");
+
+        View sideView = drawingDoc.CreateUnfoldedViewAt3(sideX, sideY, 0, false);
+        if (sideView == null)
+            throw new InvalidOperationException("Could not create the projected side torsion-bar view.");
+
+        topView.PositionLocked = false;
+        sideView.PositionLocked = false;
+
+        // Rebuild once more so the saved file contains the final view state.
+        drawingModel.EditRebuild3();
+        drawingDoc.ActivateSheet(sheetName);
+        drawingModel.ClearSelection2(true);
+        drawingModel.ViewZoomtofit2();
+
+        string savedPath;
+        if (part.DrawingSaveToPdm)
         {
-            string sheetName = string.IsNullOrWhiteSpace(part.DrawingSheetName) ? "Sheet1" : part.DrawingSheetName;
-
-            // Configure the sheet after the document is created so the chosen size, scale,
-            // projection type, and company sheet format are applied.
-            bool sheetConfigured = drawingDoc.SetupSheet6(
-                sheetName,
-                (int)paperSize,
-                (int)swDwgTemplates_e.swDwgTemplateCustom,
-                scaleNumerator,
-                scaleDenominator,
-                part.DrawingUseFirstAngleProjection,
-                sheetFormatPath,
-                0,
-                0,
-                string.Empty,
-                false,
-                0,
-                0,
-                0,
-                0,
-                1,
-                1);
-
-            if (!sheetConfigured)
-                throw new InvalidOperationException("Could not configure the drawing sheet.");
-
-            Console.WriteLine($"Drawing template: {drawingTemplatePath}");
-            Console.WriteLine($"Sheet format: {sheetFormatPath}");
-
-            drawingDoc.ActivateSheet(sheetName);
-            drawingDoc.EditSheet();
-            drawingModel.EditRebuild3();
-
-            // Insert the base front view first.
-            View frontView = drawingDoc.CreateDrawViewFromModelView3(partPath, "*Front", frontX, frontY, 0);
-            if (frontView == null)
-                throw new InvalidOperationException("Could not create the front torsion-bar view.");
-
-            if (!string.IsNullOrWhiteSpace(part.DrawingReferencedConfiguration))
-                frontView.ReferencedConfiguration = part.DrawingReferencedConfiguration;
-
-            frontView.Position = new double[] { frontX, frontY, 0.0 };
-            frontView.PositionLocked = false;
-
-            // Create the projected top view by selecting the front view first.
-            drawingModel.ClearSelection2(true);
-            if (!drawingDoc.ActivateView(frontView.Name))
-                throw new InvalidOperationException("Could not activate the front torsion-bar view before creating projected views.");
-            if (!drawingModel.Extension.SelectByID2(frontView.Name, "DRAWINGVIEW", 0, 0, 0, false, 0, null, 0))
-                throw new InvalidOperationException("Could not select the front torsion-bar view before creating the projected top view.");
-
-            View topView = drawingDoc.CreateUnfoldedViewAt3(topX, topY, 0, false);
-            if (topView == null)
-                throw new InvalidOperationException("Could not create the projected top torsion-bar view.");
-
-            // Create the projected side view from the same front view.
-            drawingModel.ClearSelection2(true);
-            if (!drawingDoc.ActivateView(frontView.Name))
-                throw new InvalidOperationException("Could not re-activate the front torsion-bar view before creating the side projection.");
-            if (!drawingModel.Extension.SelectByID2(frontView.Name, "DRAWINGVIEW", 0, 0, 0, false, 0, null, 0))
-                throw new InvalidOperationException("Could not select the front torsion-bar view before creating the projected side view.");
-
-            View sideView = drawingDoc.CreateUnfoldedViewAt3(sideX, sideY, 0, false);
-            if (sideView == null)
-                throw new InvalidOperationException("Could not create the projected side torsion-bar view.");
-
-            topView.PositionLocked = false;
-            sideView.PositionLocked = false;
-
-            // Rebuild the drawing before saving so the views are fully updated.
-            drawingModel.EditRebuild3();
-            drawingDoc.ActivateSheet(sheetName);
-            drawingModel.ClearSelection2(true);
-            drawingModel.ViewZoomtofit2();
-
-            string savedPath;
-            if (part.DrawingSaveToPdm)
-            {
-                // Drawings can save to PDM independently of the part.
-                savedPath = pdm.SaveAsPdm(drawingModel, outFolder, part.DrawingPdmDataCard);
-                Console.WriteLine($"Drawing saved to PDM: {savedPath}");
-            }
-            else
-            {
-                savedPath = Path.Combine(outFolder, drawingFileName);
-                drawingModel.SaveAs3(savedPath, 0, 1);
-                Console.WriteLine($"Drawing saved locally: {savedPath}");
-            }
-
-            if (part.DrawingCloseAfterCreate)
-            {
-                swApp.CloseDoc(drawingModel.GetTitle());
-                Console.WriteLine("Drawing closed after creating.");
-            }
-
-            return Path.GetFileName(savedPath);
+            // Drawings can be saved to PDM separately from the part file.
+            savedPath = pdm.SaveAsPdm(drawingModel, outFolder, part.DrawingPdmDataCard);
+            Console.WriteLine($"Drawing saved to PDM: {savedPath}");
         }
-        catch
+        else
         {
-            // If drawing creation fails, close the half-built document so SolidWorks is not left messy.
+            savedPath = Path.Combine(outFolder, drawingFileName);
+            drawingModel.SaveAs3(savedPath, 0, 1);
+            Console.WriteLine($"Drawing saved locally: {savedPath}");
+        }
+
+        if (part.DrawingCloseAfterCreate)
+        {
             swApp.CloseDoc(drawingModel.GetTitle());
-            throw;
+            Console.WriteLine("Drawing closed after creating.");
         }
+
+        return Path.GetFileName(savedPath);
     }
 }
 

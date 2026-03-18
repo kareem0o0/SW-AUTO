@@ -20,8 +20,8 @@ public sealed class StatorDistanceSheetPart
 
     public StatorDistanceSheetPart(SldWorks swApp, PdmModule pdm)
     {
-        _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
-        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
+        _swApp = swApp;
+        _pdm = pdm;
     }
 
     // File and save settings.
@@ -52,8 +52,8 @@ public sealed class StatorDistanceSheetPart
     public int SlotPatternCount { get; set; } = 60;
     public string MaterialName { get; set; } = "AISI 1020";
 
-    private string GetRequiredOutputFolder() => AutomationSupport.RequireText(OutputFolder, nameof(OutputFolder), nameof(StatorDistanceSheetPart));
-    private string GetRequiredLocalFileName() => AutomationSupport.RequireText(LocalFileName, nameof(LocalFileName), nameof(StatorDistanceSheetPart));
+    private string GetRequiredOutputFolder() => OutputFolder;
+    private string GetRequiredLocalFileName() => LocalFileName;
     private AutomationUiScope BeginAutomationUiSuppression() => new(_swApp);
 
     /// <summary>
@@ -125,7 +125,7 @@ public sealed class StatorDistanceSheetPart
         ModelDoc2 swModel = null;
         SketchManager swSketchManager = null;
 
-        try
+        // Build the distance sheet feature by feature, then save it.
         {
             Dimension swDim = null;
             DisplayDimension displayDim = null;
@@ -954,17 +954,9 @@ public sealed class StatorDistanceSheetPart
                 Console.WriteLine("Part closed after creating.");
             }
 
-            // Restore user preferences
-            _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, true);
             Console.WriteLine("Done!");
 
             return Path.GetFileName(savedPath); 
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("Fatal error: " + ex);
-            try { _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, true); } catch { }
-            return null; // Return null to indicate failure
         }
     }
 

@@ -25,8 +25,8 @@ public sealed class PressPlatePart
 
     public PressPlatePart(SldWorks swApp, PdmModule pdm)
     {
-        _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
-        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
+        _swApp = swApp;
+        _pdm = pdm;
     }
 
     // File and save settings.
@@ -48,8 +48,8 @@ public sealed class PressPlatePart
     public double AssemblyAngleDeg { get; set; } = 3.0;
     public string MaterialName { get; set; } = "AISI 1020";
 
-    private string GetRequiredOutputFolder() => AutomationSupport.RequireText(OutputFolder, nameof(OutputFolder), nameof(PressPlatePart));
-    private string GetRequiredLocalFileName() => AutomationSupport.RequireText(LocalFileName, nameof(LocalFileName), nameof(PressPlatePart));
+    private string GetRequiredOutputFolder() => OutputFolder;
+    private string GetRequiredLocalFileName() => LocalFileName;
     private AutomationUiScope BeginAutomationUiSuppression() => new(_swApp);
 
     /// <summary>
@@ -97,11 +97,10 @@ public sealed class PressPlatePart
         ModelDoc2 swModel = null;
         SketchManager swSketchManager = null;
 
-        try
+        // Build the ring, add one plate, pattern it around the body, then save it.
         {
             Dimension swDim = null;
             DisplayDimension displayDim = null;
-            bool pressPlateSketchInferenceWasEnabled = _swApp.GetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference);
 
             if (!Directory.Exists(outFolder))
                 Directory.CreateDirectory(outFolder);
@@ -342,15 +341,8 @@ public sealed class PressPlatePart
                 Console.WriteLine("Part closed after creating.");
             }
 
-            _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, pressPlateSketchInferenceWasEnabled);
             Console.WriteLine("Done!");
             return Path.GetFileName(savedPath);
-        }
-        catch (Exception ex)
-        {
-            try { _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, true); } catch { }
-            Console.WriteLine("Fatal error: " + ex);
-            return null;
         }
     }
 

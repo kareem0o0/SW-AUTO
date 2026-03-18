@@ -21,8 +21,8 @@ public sealed class SkeletonPart
 
     public SkeletonPart(SldWorks swApp, PdmModule pdm)
     {
-        _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
-        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
+        _swApp = swApp;
+        _pdm = pdm;
     }
 
     // File and save settings.
@@ -36,8 +36,8 @@ public sealed class SkeletonPart
     public double SideOffset { get; set; } = 0.5;
     public double GroundOffset { get; set; } = -0.25;
 
-    private string GetRequiredOutputFolder() => AutomationSupport.RequireText(OutputFolder, nameof(OutputFolder), nameof(SkeletonPart));
-    private string GetRequiredLocalFileName() => AutomationSupport.RequireText(LocalFileName, nameof(LocalFileName), nameof(SkeletonPart));
+    private string GetRequiredOutputFolder() => OutputFolder;
+    private string GetRequiredLocalFileName() => LocalFileName;
 
     /// <summary>
     /// Creates the reference-plane part and saves it.

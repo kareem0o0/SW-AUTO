@@ -22,9 +22,6 @@ public static class Project1
     /// </summary>
     public static void Run(string outFolder, SldWorks swApp, PdmModule pdm)
     {
-        if (string.IsNullOrWhiteSpace(outFolder))
-            throw new ArgumentException("Output folder is required.", nameof(outFolder));
-
         SkeletonPart skeleton = new SkeletonPart(swApp, pdm);
         skeleton.OutputFolder = outFolder;
         skeleton.SideOffset = 0.5;
@@ -77,9 +74,6 @@ public static class Project1
     /// </summary>
     public static void Run2(string outFolder, SldWorks swApp, PdmModule pdm)
     {
-        if (string.IsNullOrWhiteSpace(outFolder))
-            throw new ArgumentException("Output folder is required.", nameof(outFolder));
-
         SkeletonPart skeleton = new SkeletonPart(swApp, pdm);
         skeleton.OutputFolder = outFolder;
         skeleton.SideOffset = 2;
@@ -120,9 +114,6 @@ public static class Project1
     /// </summary>
     public static void Run3(string outFolder, SldWorks swApp, PdmModule pdm)
     {
-        if (string.IsNullOrWhiteSpace(outFolder))
-            throw new ArgumentException("Output folder is required.", nameof(outFolder));
-
         _ = swApp;
         _ = pdm;
         Console.WriteLine("Run3 is reserved for ad-hoc generator checks.");
@@ -130,9 +121,6 @@ public static class Project1
 
     public static void Run4(string outFolder, SldWorks swApp, PdmModule pdm)
     {
-        if (string.IsNullOrWhiteSpace(outFolder))
-            throw new ArgumentException("Output folder is required.", nameof(outFolder));
-
         // These objects are the editable parameter surface for the machine build.
         // Skeleton planes and axes act as the assembly reference frame.
         SkeletonPart skeleton = new SkeletonPart(swApp, pdm);
@@ -399,9 +387,6 @@ public static class Project1
 
     public static void Run5(string outFolder, SldWorks swApp, PdmModule pdm)
     {
-        if (string.IsNullOrWhiteSpace(outFolder))
-            throw new ArgumentException("Output folder is required.", nameof(outFolder));
-
         // This is the object you edit for the drawing test.
         // It owns everything for the torsion bar:
         // 1. the 3D model parameters

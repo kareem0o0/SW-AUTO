@@ -20,8 +20,8 @@ public sealed class StatorEndSheetPart
 
     public StatorEndSheetPart(SldWorks swApp, PdmModule pdm)
     {
-        _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
-        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
+        _swApp = swApp;
+        _pdm = pdm;
     }
 
     // File and save settings.
@@ -41,8 +41,8 @@ public sealed class StatorEndSheetPart
     public int SlotPatternCount { get; set; } = 60;
     public string MaterialName { get; set; } = "AISI 1020";
 
-    private string GetRequiredOutputFolder() => AutomationSupport.RequireText(OutputFolder, nameof(OutputFolder), nameof(StatorEndSheetPart));
-    private string GetRequiredLocalFileName() => AutomationSupport.RequireText(LocalFileName, nameof(LocalFileName), nameof(StatorEndSheetPart));
+    private string GetRequiredOutputFolder() => OutputFolder;
+    private string GetRequiredLocalFileName() => LocalFileName;
     private AutomationUiScope BeginAutomationUiSuppression() => new(_swApp);
 
     /// <summary>
@@ -86,7 +86,7 @@ public sealed class StatorEndSheetPart
         ModelDoc2 swModel = null;
         SketchManager swSketchManager = null;
 
-        try
+        // Build the end sheet and save it once the feature tree is complete.
         {
             Dimension swDim = null;
             DisplayDimension displayDim = null;
@@ -320,16 +320,9 @@ public sealed class StatorEndSheetPart
                 Console.WriteLine("Part closed after creating.");
             }
 
-            _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, true);
             Console.WriteLine("Done!");
 
             return Path.GetFileName(savedPath);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("Fatal error: " + ex);
-            try { _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, true); } catch { }
-            return null;
         }
     }
 

@@ -25,8 +25,8 @@ public sealed class StatorPressringNdePart
 
     public StatorPressringNdePart(SldWorks swApp, PdmModule pdm)
     {
-        _swApp = swApp ?? throw new ArgumentNullException(nameof(swApp));
-        _pdm = pdm ?? throw new ArgumentNullException(nameof(pdm));
+        _swApp = swApp;
+        _pdm = pdm;
     }
 
     // File and save settings.
@@ -51,8 +51,8 @@ public sealed class StatorPressringNdePart
     public int PocketCount { get; set; } = 8;
     public string MaterialName { get; set; } = "AISI 1020";
 
-    private string GetRequiredOutputFolder() => AutomationSupport.RequireText(OutputFolder, nameof(OutputFolder), nameof(StatorPressringNdePart));
-    private string GetRequiredLocalFileName() => AutomationSupport.RequireText(LocalFileName, nameof(LocalFileName), nameof(StatorPressringNdePart));
+    private string GetRequiredOutputFolder() => OutputFolder;
+    private string GetRequiredLocalFileName() => LocalFileName;
     private AutomationUiScope BeginAutomationUiSuppression() => new(_swApp);
 
     /// <summary>
@@ -106,11 +106,10 @@ public sealed class StatorPressringNdePart
         ModelDoc2 swModel = null;
         SketchManager swSketchManager = null;
 
-        try
+        // Build the press ring body, cut one pocket, pattern it, then save the part.
         {
             Dimension swDim = null;
             DisplayDimension displayDim = null;
-            bool sketchInferenceWasEnabled = _swApp.GetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference);
 
             // Local helper:
             // creates the pocket cut from the already prepared pocket sketch.
@@ -851,15 +850,8 @@ public sealed class StatorPressringNdePart
                 Console.WriteLine("Part closed after creating.");
             }
 
-            _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, sketchInferenceWasEnabled);
             Console.WriteLine("Done!");
             return Path.GetFileName(savedPath);
-        }
-        catch (Exception ex)
-        {
-            try { _swApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSketchInference, true); } catch { }
-            Console.WriteLine("Fatal error: " + ex);
-            return null;
         }
     }
 
